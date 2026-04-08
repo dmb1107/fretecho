@@ -36,15 +36,25 @@ export function getVoices(): Promise<SpeechSynthesisVoice[]> {
   return voicesReadyPromise;
 }
 
-/** Pick a default voice that handles letter-name pronunciation well. */
+// macOS ships a pile of "novelty" voices (Zarvox, Bahh, Trinoids, Cellos,
+// Whisper, Bells, Bubbles, etc.) that are useless for training. Browsers
+// expose them in the same list as the real speech voices, so we explicitly
+// reject them in fallback selection.
+const NOVELTY_VOICE_PATTERN =
+  /\b(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Deranged|Good News|Hysterical|Jester|Organ|Pipe Organ|Trinoids|Whisper|Zarvox|Junior|Ralph|Kathy|Princess|Superstar|Wobble)\b/i;
+
+/** Pick a default voice that sounds reasonable and handles letter names. */
 export function pickDefaultVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   if (voices.length === 0) return null;
+
+  // 1. Preferred: Chrome/Edge's Google and Microsoft English voices — these
+  //    are the highest quality and handle letter names correctly.
   const preferences: RegExp[] = [
     /Google US English$/i,
     /Google US English/i,
     /Google UK English Female/i,
     /Google UK English/i,
-    /^Google/i,
+    /^Google.*English/i,
     /Microsoft.*Aria/i,
     /Microsoft.*Jenny/i,
     /Microsoft.*Zira/i,
@@ -54,11 +64,31 @@ export function pickDefaultVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesi
     const v = voices.find((v) => p.test(v.name));
     if (v) return v;
   }
-  // Last resort: first English voice, avoiding obviously bad Apple voices for
-  // single-letter pronunciation.
+
+  // 2. Fallback (e.g. Firefox / Safari where only OS voices are exposed):
+  //    prefer the standard macOS English voices in quality order. The
+  //    "A." phonetic hack in sessionEngine handles letter pronunciation, so
+  //    these are fine for our prompts.
+  const applePreferences: RegExp[] = [
+    /^Samantha/i,
+    /^Alex/i,
+    /^Victoria/i,
+    /^Daniel/i,
+    /^Karen/i,
+    /^Moira/i,
+    /^Tessa/i,
+    /^Fiona/i,
+    /^Fred/i,
+  ];
+  for (const p of applePreferences) {
+    const v = voices.find((v) => p.test(v.name));
+    if (v) return v;
+  }
+
+  // 3. Last resort: any English voice that isn't one of the novelty voices.
   const english = voices.filter((v) => v.lang.startsWith('en'));
-  const nonApple = english.filter((v) => !/\b(Samantha|Alex|Fiona|Karen|Daniel|Moira|Tessa)\b/i.test(v.name));
-  return nonApple[0] ?? english[0] ?? voices[0];
+  const usable = english.filter((v) => !NOVELTY_VOICE_PATTERN.test(v.name));
+  return usable[0] ?? english[0] ?? voices[0];
 }
 
 function findVoiceByName(voices: SpeechSynthesisVoice[], name: string | null): SpeechSynthesisVoice | null {
