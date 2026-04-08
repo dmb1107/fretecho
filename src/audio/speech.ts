@@ -96,13 +96,16 @@ function findVoiceByName(voices: SpeechSynthesisVoice[], name: string | null): S
   return voices.find((v) => v.name === name) ?? null;
 }
 
-/** Pre-warm the synthesizer so the first real utterance isn't delayed. */
+/**
+ * Pre-warm the voice list so the first real `speak()` call doesn't pay the
+ * cost of waiting for `voiceschanged`. We used to also queue a silent
+ * utterance here, but Chrome has a well-known bug where calling
+ * `cancel()` immediately before `speak()` drops the new utterance — and
+ * that's exactly the pattern that happens when the first prompt comes in.
+ */
 export function prewarmSpeech() {
   if (!speechSupported()) return;
   void getVoices();
-  const u = new SpeechSynthesisUtterance(' ');
-  u.volume = 0;
-  window.speechSynthesis.speak(u);
 }
 
 export interface SpeakOptions {
@@ -157,8 +160,12 @@ export async function speak(text: string, opts: SpeakOptions = {}): Promise<void
     u.onend = done;
     u.onerror = done;
     try {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(u);
+      // Only cancel if something is actually queued. Calling cancel()
+      // immediately before speak() in the same tick is a Chrome footgun
+      // that silently drops the new utterance.
+      const synth = window.speechSynthesis;
+      if (synth.speaking || synth.pending) synth.cancel();
+      synth.speak(u);
     } catch {
       done();
     }
