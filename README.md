@@ -54,9 +54,6 @@ That's what builds the ear → hand → fingerboard mapping you're after.
 
 ![FretEcho training screen](./docs/screenshot.png)
 
-*(Add a screenshot at `docs/screenshot.png` if you're checking this out from
-a fresh clone.)*
-
 ## Getting started
 
 ### Prerequisites
