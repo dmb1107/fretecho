@@ -5,6 +5,7 @@ import { useSettings } from '../settings/settingsStore';
 import { useStatsStore } from '../stats/statsStore';
 import { openMic, type MicStream } from '../audio/micInput';
 import { PitchLoop } from '../audio/pitchDetector';
+import { cancelSpeech } from '../audio/speech';
 import {
   SessionEngine,
   type EngineState,
@@ -108,6 +109,11 @@ export function TrainingScreen() {
   };
 
   const cleanup = () => {
+    // Abort any in-flight speech so a speak() promise in the engine's
+    // nextRound() doesn't get stranded (would otherwise keep Chrome's
+    // global SpeechSynthesis "stuck" and break all future sessions).
+    cancelSpeech();
+    engineRef.current?.stop();
     loopRef.current?.stop();
     micRef.current?.stop();
     loopRef.current = null;

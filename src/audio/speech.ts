@@ -112,6 +112,21 @@ export interface SpeakOptions {
   voiceName?: string | null;
 }
 
+/**
+ * Cancel any in-flight speech. Safe to call anywhere; we use it when ending
+ * a session or unmounting the training screen so the engine's awaited
+ * `speak()` promise doesn't get stranded if Chrome's `SpeechSynthesis`
+ * global gets stuck mid-utterance.
+ */
+export function cancelSpeech() {
+  if (!speechSupported()) return;
+  try {
+    window.speechSynthesis.cancel();
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function speak(text: string, opts: SpeakOptions = {}): Promise<void> {
   if (!speechSupported()) return;
   const voices = await getVoices();
@@ -123,9 +138,29 @@ export async function speak(text: string, opts: SpeakOptions = {}): Promise<void
     u.pitch = 1;
     u.lang = opts.lang ?? (chosen?.lang ?? 'en-US');
     if (chosen) u.voice = chosen;
-    u.onend = () => resolve();
-    u.onerror = () => resolve();
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(u);
+
+    // Chrome occasionally fails to fire onend/onerror after a cancel() — if
+    // that happens the promise hangs forever and the session engine gets
+    // stuck. Budget a safety timeout proportional to the utterance length
+    // (roughly 120 ms per character + 1 s overhead) so we always make
+    // forward progress.
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(safetyTimer);
+      resolve();
+    };
+    const safetyMs = Math.max(2000, text.length * 120 + 1000);
+    const safetyTimer = setTimeout(done, safetyMs);
+
+    u.onend = done;
+    u.onerror = done;
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(u);
+    } catch {
+      done();
+    }
   });
 }

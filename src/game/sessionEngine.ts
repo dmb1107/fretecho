@@ -5,7 +5,7 @@ import type { BassType, Position } from '../music/tunings';
 import { noteAt, positionKey, stringLabel } from '../music/tunings';
 import { midiToNoteName } from '../music/notes';
 import type { PitchLoop } from '../audio/pitchDetector';
-import { prewarmSpeech, speak } from '../audio/speech';
+import { cancelSpeech, prewarmSpeech, speak } from '../audio/speech';
 import { playError, playSuccess } from '../audio/feedbackTones';
 import { pickNext } from './weakSpotPicker';
 import type { StatsMap } from '../stats/statsStore';
@@ -76,6 +76,9 @@ export class SessionEngine {
 
   stop() {
     this.stopped = true;
+    // Abort any in-flight speech so the awaited `speak()` inside nextRound
+    // resolves immediately and the engine exits cleanly.
+    cancelSpeech();
     this.deps.pitchLoop.stop();
     this.setState({ kind: 'done', results: this.results });
   }
