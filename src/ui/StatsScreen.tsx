@@ -1,0 +1,113 @@
+// Heatmap view of per-position proficiency.
+
+import { useState } from 'react';
+import { useSettings } from '../settings/settingsStore';
+import { proficiency, useStatsStore, keyFor } from '../stats/statsStore';
+import { Fretboard, type FretboardHighlight } from './Fretboard';
+import { allPositions } from '../music/tunings';
+
+// Red -> Yellow -> Green gradient.
+function colorForScore(score: number | null): string {
+  if (score === null) return '#2a2a2a';
+  const s = Math.max(0, Math.min(1, score));
+  // Interpolate via HSL from 0° (red) to 130° (green).
+  const hue = s * 130;
+  return `hsl(${hue}, 70%, 50%)`;
+}
+
+export function StatsScreen() {
+  const settings = useSettings();
+  const stats = useStatsStore((s) => s.stats);
+  const reset = useStatsStore((s) => s.reset);
+  const [hover, setHover] = useState<{ s: number; f: number } | null>(null);
+
+  const positions = allPositions(settings.bass, settings.minFret, settings.maxFret);
+  const highlights = new Map<string, FretboardHighlight>();
+  for (const p of positions) {
+    const stat = stats[keyFor(settings.bass, p.stringIndex, p.fret)];
+    const score = proficiency(stat);
+    highlights.set(`${p.stringIndex}:${p.fret}`, { color: colorForScore(score) });
+  }
+
+  const hoverStat = hover ? stats[keyFor(settings.bass, hover.s, hover.f)] : undefined;
+  const hoverScore = hover ? proficiency(hoverStat) : null;
+
+  const totalAttempts = Object.values(stats).reduce((a, b) => a + b.attempts, 0);
+  const totalCorrect = Object.values(stats).reduce((a, b) => a + b.correct, 0);
+
+  return (
+    <div className="flex flex-col gap-6 p-6 max-w-5xl mx-auto">
+      <div className="flex items-end justify-between">
+        <h2 className="text-2xl font-bold">Proficiency heatmap</h2>
+        <button
+          onClick={() => {
+            if (confirm('Reset all stats?')) reset();
+          }}
+          className="px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-sm"
+        >
+          Reset stats
+        </button>
+      </div>
+
+      <div className="flex gap-6 text-sm">
+        <Card label="Attempts" value={String(totalAttempts)} />
+        <Card label="Correct" value={String(totalCorrect)} />
+        <Card
+          label="Overall accuracy"
+          value={`${totalAttempts === 0 ? 0 : Math.round((totalCorrect / totalAttempts) * 100)}%`}
+        />
+      </div>
+
+      <div className="flex justify-center">
+        <Fretboard
+          bass={settings.bass}
+          minFret={settings.minFret}
+          maxFret={settings.maxFret}
+          highlights={highlights}
+          useFlats={settings.useFlats}
+          onCellClick={(s, f) => setHover({ s, f })}
+        />
+      </div>
+
+      <div className="min-h-[60px] rounded border border-neutral-800 p-3 bg-neutral-900/40">
+        {hover && hoverStat ? (
+          <div className="text-sm text-neutral-300">
+            <div className="font-semibold">
+              String {hover.s + 1}, Fret {hover.f}
+            </div>
+            <div>
+              {hoverStat.correct} / {hoverStat.attempts} correct ({Math.round((hoverStat.correct / hoverStat.attempts) * 100)}%),
+              avg {(hoverStat.totalMs / hoverStat.attempts / 1000).toFixed(2)}s
+              {hoverScore !== null && <> · score {Math.round(hoverScore * 100)}</>}
+            </div>
+          </div>
+        ) : hover ? (
+          <div className="text-sm text-neutral-500">
+            String {hover.s + 1}, Fret {hover.f} — no attempts yet
+          </div>
+        ) : (
+          <div className="text-sm text-neutral-500">Click a position to see its stats.</div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-3 text-xs text-neutral-500">
+        <span>Low</span>
+        <div
+          className="h-3 w-40 rounded"
+          style={{ background: 'linear-gradient(to right, hsl(0,70%,50%), hsl(65,70%,50%), hsl(130,70%,50%))' }}
+        />
+        <span>High</span>
+        <span className="ml-4">Gray = unseen</span>
+      </div>
+    </div>
+  );
+}
+
+function Card({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded border border-neutral-800 bg-neutral-900/40 px-4 py-2">
+      <div className="text-xs uppercase tracking-widest text-neutral-500">{label}</div>
+      <div className="text-2xl font-bold">{value}</div>
+    </div>
+  );
+}
