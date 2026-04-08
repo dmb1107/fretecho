@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background with safe area for maskable icons (logo stays within 80% center) -->
+  <rect width="512" height="512" rx="96" fill="#0b0b0b"/>
+  <!-- Fretboard body -->
+  <rect x="80" y="168" width="352" height="176" rx="10" fill="#1c1410" stroke="#3a2a22" stroke-width="4"/>
+  <!-- Nut -->
+  <line x1="152" y1="160" x2="152" y2="352" stroke="#e5d2b5" stroke-width="12"/>
+  <!-- Frets -->
+  <line x1="220" y1="160" x2="220" y2="352" stroke="#7a6555" stroke-width="4"/>
+  <line x1="288" y1="160" x2="288" y2="352" stroke="#7a6555" stroke-width="4"/>
+  <line x1="356" y1="160" x2="356" y2="352" stroke="#7a6555" stroke-width="4"/>
+  <line x1="424" y1="160" x2="424" y2="352" stroke="#7a6555" stroke-width="4"/>
+  <!-- Inlay dot -->
+  <circle cx="322" cy="256" r="6" fill="#4a3a2e"/>
+  <!-- Strings (thinnest at top) -->
+  <line x1="152" y1="196" x2="432" y2="196" stroke="#c8b89a" stroke-width="3"/>
+  <line x1="152" y1="232" x2="432" y2="232" stroke="#c8b89a" stroke-width="4"/>
+  <line x1="152" y1="276" x2="432" y2="276" stroke="#c8b89a" stroke-width="5"/>
+  <line x1="152" y1="320" x2="432" y2="320" stroke="#c8b89a" stroke-width="6"/>
+  <!-- Highlight dot on A string, fret 3 -->
+  <circle cx="254" cy="276" r="26" fill="#ff6b35"/>
+</svg>
