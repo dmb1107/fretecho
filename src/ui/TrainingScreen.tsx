@@ -29,6 +29,8 @@ export function TrainingScreen() {
   const [running, setRunning] = useState(false);
   const [detected, setDetected] = useState<{ midi: number; frequency: number; cents: number } | null>(null);
   const [micOpen, setMicOpen] = useState(false);
+  const [correctCount, setCorrectCount] = useState(0);
+  const lastCountedRoundRef = useRef<number>(0);
 
   const micRef = useRef<MicStream | null>(null);
   const loopRef = useRef<PitchLoop | null>(null);
@@ -80,6 +82,8 @@ export function TrainingScreen() {
 
   const startSession = async () => {
     setError(null);
+    setCorrectCount(0);
+    lastCountedRoundRef.current = 0;
     try {
       const loop = await ensureMicOpen();
       const engine = new SessionEngine(cfg, {
@@ -90,6 +94,11 @@ export function TrainingScreen() {
           setEngineState(s);
           if (s.kind === 'feedback') {
             setFlash(s.result.correct ? 'success' : 'error');
+            // Count each round at most once on its first feedback transition.
+            if (s.round !== lastCountedRoundRef.current) {
+              lastCountedRoundRef.current = s.round;
+              if (s.result.correct) setCorrectCount((c) => c + 1);
+            }
           }
         },
       });
@@ -164,7 +173,7 @@ export function TrainingScreen() {
     return m;
   }, [engineState, settings.showHint]);
 
-  const progress = progressFor(engineState, cfg.notesPerSession);
+  const progress = progressFor(engineState, cfg.notesPerSession, correctCount);
   const currentText =
     engineState.kind === 'prompting' || engineState.kind === 'listening'
       ? engineState.text
@@ -347,13 +356,17 @@ function DetectedCard({
   );
 }
 
-function progressFor(state: EngineState, total: number) {
+function progressFor(state: EngineState, total: number, correct: number) {
   if (state.kind === 'idle') return { round: 0, total, correct: 0 };
   if (state.kind === 'done') {
-    return { round: state.results.length, total, correct: state.results.filter((r) => r.correct).length };
+    return {
+      round: state.results.length,
+      total,
+      correct: state.results.filter((r) => r.correct).length,
+    };
   }
   const round = 'round' in state ? state.round : 0;
-  return { round, total, correct: 0 };
+  return { round, total, correct };
 }
 
 function SessionSummary({
