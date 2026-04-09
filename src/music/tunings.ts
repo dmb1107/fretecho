@@ -40,11 +40,21 @@ export function instrumentOf(tuning: TuningId): Instrument {
   return TUNINGS[tuning].instrument;
 }
 
-/** Human-readable string label (thickest = "B" or "E"). */
+/** Human-readable string label, e.g. "A", "D", "low E", "high E". */
 export function stringLabel(tuning: TuningId, stringIndex: number): string {
-  const open = TUNINGS[tuning].strings[stringIndex];
-  // Drop octave for display.
-  return open.replace(/-?\d+$/, '');
+  const def = TUNINGS[tuning];
+  const letter = def.strings[stringIndex].replace(/-?\d+$/, '');
+  // When the same note letter appears on more than one string (e.g. guitar's
+  // two E strings), disambiguate with "low" / "high".
+  const letters = def.strings.map((s) => s.replace(/-?\d+$/, ''));
+  const sameLetterIndices = letters.reduce<number[]>((acc, l, i) => {
+    if (l === letter) acc.push(i);
+    return acc;
+  }, []);
+  if (sameLetterIndices.length <= 1) return letter;
+  // Lowest pitch index = "low", highest = "high".
+  if (stringIndex === sameLetterIndices[0]) return `low ${letter}`;
+  return `high ${letter}`;
 }
 
 /** MIDI note at (stringIndex, fret). */
