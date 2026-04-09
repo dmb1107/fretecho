@@ -18,6 +18,15 @@ export function HelpScreen() {
         </Ol>
       </Section>
 
+      <Section title="Chord tone trainer">
+        <Ol>
+          <li>Switch to <Kbd>Chord Tones</Kbd> mode using the toggle at the top of the Train tab.</li>
+          <li>The app calls out a chord (e.g. "C major seven") and you play each tone in order: root, 3rd, 5th, 7th.</li>
+          <li>Any octave counts — play the correct pitch class on any string.</li>
+          <li>Choose which chord types to practice in <Kbd>Settings</Kbd>.</li>
+        </Ol>
+      </Section>
+
       <Section title="Good to know">
         <Ul>
           <li>Scoring is by note name — any octave of the right note counts.</li>

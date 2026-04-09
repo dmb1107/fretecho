@@ -1,4 +1,4 @@
-// Training screen: runs a session, displays prompt + fretboard + progress.
+// Chord tone training screen: plays a chord name, user plays each tone in sequence.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings, type TrainingMode } from '../settings/settingsStore';
@@ -7,34 +7,24 @@ import { openMic, type MicStream } from '../audio/micInput';
 import { PitchLoop } from '../audio/pitchDetector';
 import { cancelSpeech } from '../audio/speech';
 import {
-  SessionEngine,
-  type EngineState,
-  type RoundResult,
-  type SessionConfig,
-  describeRound,
-} from '../game/sessionEngine';
+  ChordSessionEngine,
+  type ChordEngineState,
+  type ChordRoundResult,
+  type ChordSessionConfig,
+  describeChordRound,
+} from '../game/chordSessionEngine';
+import { noteAt } from '../music/tunings';
+import { midiToNoteName } from '../music/notes';
 import { Fretboard, type FretboardHighlight } from './Fretboard';
 import { MicMeter } from './MicMeter';
 import { FeedbackFlash, type FlashKind } from './FeedbackFlash';
-import { midiToNoteClass, midiToNoteName } from '../music/notes';
-import { ChordTrainingScreen } from './ChordTrainingScreen';
 
-export function TrainingScreen() {
-  const settings = useSettings();
-
-  if (settings.trainingMode === 'chords') {
-    return <ChordTrainingScreen />;
-  }
-
-  return <NoteTrainingScreen />;
-}
-
-function NoteTrainingScreen() {
+export function ChordTrainingScreen() {
   const settings = useSettings();
   const record = useStatsStore((s) => s.record);
   const getStats = () => useStatsStore.getState().stats;
 
-  const [engineState, setEngineState] = useState<EngineState>({ kind: 'idle' });
+  const [engineState, setEngineState] = useState<ChordEngineState>({ kind: 'idle' });
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<FlashKind>(null);
   const [running, setRunning] = useState(false);
@@ -45,22 +35,22 @@ function NoteTrainingScreen() {
 
   const micRef = useRef<MicStream | null>(null);
   const loopRef = useRef<PitchLoop | null>(null);
-  const engineRef = useRef<SessionEngine | null>(null);
+  const engineRef = useRef<ChordSessionEngine | null>(null);
 
-  const cfg: SessionConfig = useMemo(
+  const cfg: ChordSessionConfig = useMemo(
     () => ({
       tuning: settings.tuning,
-      notesPerSession: settings.notesPerSession,
+      chordsPerSession: settings.chordsPerSession,
+      enabledChordTypes: settings.enabledChordTypes,
       allowAccidentals: settings.allowAccidentals,
-      promptStyle: settings.promptStyle,
-      focusWeakSpots: settings.focusWeakSpots,
       minFret: settings.minFret,
       maxFret: settings.maxFret,
+      focusWeakSpots: settings.focusWeakSpots,
+      showHint: settings.showHint,
     }),
     [settings]
   );
 
-  /** Open mic + pitch loop and wire the detected-note display. */
   const ensureMicOpen = async (): Promise<PitchLoop> => {
     if (loopRef.current) return loopRef.current;
     const mic = await openMic(settings.inputDeviceId ?? undefined);
@@ -86,9 +76,7 @@ function NoteTrainingScreen() {
     }
   };
 
-  const stopMicTest = () => {
-    cleanup();
-  };
+  const stopMicTest = () => cleanup();
 
   const startSession = async () => {
     setError(null);
@@ -96,18 +84,19 @@ function NoteTrainingScreen() {
     lastCountedRoundRef.current = 0;
     try {
       const loop = await ensureMicOpen();
-      const engine = new SessionEngine(cfg, {
+      const engine = new ChordSessionEngine(cfg, {
         pitchLoop: loop,
         getStats,
         recordStat: record,
         onStateChange: (s) => {
           setEngineState(s);
-          if (s.kind === 'feedback') {
-            setFlash(s.result.correct ? 'success' : 'error');
-            // Count each round at most once on its first feedback transition.
+          if (s.kind === 'tone-feedback') {
+            setFlash('success');
+          } else if (s.kind === 'feedback') {
+            setFlash(s.allCorrectFirstTry ? 'success' : 'error');
             if (s.round !== lastCountedRoundRef.current) {
               lastCountedRoundRef.current = s.round;
-              if (s.result.correct) setCorrectCount((c) => c + 1);
+              if (s.allCorrectFirstTry) setCorrectCount((c) => c + 1);
             }
           }
         },
@@ -128,9 +117,6 @@ function NoteTrainingScreen() {
   };
 
   const cleanup = () => {
-    // Abort any in-flight speech so a speak() promise in the engine's
-    // nextRound() doesn't get stranded (would otherwise keep Chrome's
-    // global SpeechSynthesis "stuck" and break all future sessions).
     cancelSpeech();
     engineRef.current?.stop();
     loopRef.current?.stop();
@@ -146,57 +132,61 @@ function NoteTrainingScreen() {
     return () => cleanup();
   }, []);
 
-  // String to highlight on the fretboard: always reveal the target string
-  // regardless of the hint setting. In "note-only" mode the player can play
-  // the note on *any* string, so we don't pin them to a specific one.
-  const highlightedString =
-    cfg.promptStyle === 'note-only'
-      ? undefined
-      : engineState.kind === 'prompting' || engineState.kind === 'listening'
-      ? engineState.target.stringIndex
-      : engineState.kind === 'feedback'
-      ? engineState.result.position.stringIndex
-      : undefined;
-
-  // Build fretboard highlights based on state.
+  // Build fretboard highlights: show all positions matching the expected pitch class.
   const highlights = useMemo(() => {
     const m = new Map<string, FretboardHighlight>();
-    if (engineState.kind === 'prompting') {
-      if (!settings.showHint) return m;
-      const { target } = engineState;
-      m.set(`${target.stringIndex}:${target.fret}`, { color: '#ff6b35', ring: true });
-    } else if (engineState.kind === 'listening') {
-      const { target, recorded } = engineState;
-      // After a wrong first attempt, reveal the target in red regardless of
-      // the hint setting so the player sees where they should have played.
-      if (recorded) {
-        m.set(`${target.stringIndex}:${target.fret}`, { color: '#ef4444' });
-      } else if (settings.showHint) {
-        m.set(`${target.stringIndex}:${target.fret}`, { color: '#ff6b35', ring: true });
+    if (engineState.kind !== 'listening' && engineState.kind !== 'tone-feedback') return m;
+
+    const tuning = cfg.tuning;
+    const numStrings = { '4-string': 4, '5-string': 5, '6-string': 6 }[tuning] ?? 4;
+
+    if (engineState.kind === 'listening') {
+      const { expectedPitchClass, recorded, completedTones } = engineState;
+
+      // Show completed tones in dim green.
+      for (const pc of completedTones) {
+        for (let s = 0; s < numStrings; s++) {
+          for (let f = cfg.minFret; f <= cfg.maxFret; f++) {
+            if (noteAt(tuning, s, f) % 12 === pc) {
+              m.set(`${s}:${f}`, { color: '#22c55e', ring: true, textColor: '#4ade80' });
+            }
+          }
+        }
       }
-    } else if (engineState.kind === 'feedback') {
-      const { result } = engineState;
-      m.set(`${result.position.stringIndex}:${result.position.fret}`, {
-        color: result.correct ? '#22c55e' : '#ef4444',
-      });
+
+      // Show current expected tone.
+      if (recorded || settings.showHint) {
+        const color = recorded ? '#ef4444' : '#ff6b35';
+        for (let s = 0; s < numStrings; s++) {
+          for (let f = cfg.minFret; f <= cfg.maxFret; f++) {
+            if (noteAt(tuning, s, f) % 12 === expectedPitchClass) {
+              m.set(`${s}:${f}`, { color, ring: !recorded });
+            }
+          }
+        }
+      }
+    } else if (engineState.kind === 'tone-feedback') {
+      // Flash completed tones green.
+      const { completedTones } = engineState;
+      for (const pc of completedTones) {
+        for (let s = 0; s < numStrings; s++) {
+          for (let f = cfg.minFret; f <= cfg.maxFret; f++) {
+            if (noteAt(tuning, s, f) % 12 === pc) {
+              m.set(`${s}:${f}`, { color: '#22c55e' });
+            }
+          }
+        }
+      }
     }
     return m;
-  }, [engineState, settings.showHint]);
+  }, [engineState, settings.showHint, cfg.tuning, cfg.minFret, cfg.maxFret]);
 
-  const progress = progressFor(engineState, cfg.notesPerSession, correctCount);
-  const currentText =
-    engineState.kind === 'prompting' || engineState.kind === 'listening'
-      ? engineState.text
-      : engineState.kind === 'feedback'
-      ? describeRound(cfg.tuning, engineState.result, engineState.result.useFlats)
-      : null;
+  const useFlats =
+    engineState.kind !== 'idle' && engineState.kind !== 'done' && 'chord' in engineState
+      ? engineState.chord.useFlats
+      : false;
 
-  const currentNoteLarge =
-    engineState.kind === 'prompting' || engineState.kind === 'listening'
-      ? midiToNoteClass(engineState.expectedMidi, engineState.useFlats)
-      : engineState.kind === 'feedback'
-      ? midiToNoteClass(engineState.result.expectedMidi, engineState.result.useFlats)
-      : '—';
+  const progress = chordProgressFor(engineState, cfg.chordsPerSession, correctCount);
 
   return (
     <div className="flex flex-col gap-3 p-3 sm:gap-6 sm:p-6 max-w-5xl mx-auto">
@@ -211,41 +201,13 @@ function NoteTrainingScreen() {
       )}
 
       {engineState.kind === 'done' ? (
-        <SessionSummary results={engineState.results} tuning={cfg.tuning} onDone={() => setEngineState({ kind: 'idle' })} />
+        <ChordSessionSummary
+          results={engineState.results}
+          onDone={() => setEngineState({ kind: 'idle' })}
+        />
       ) : (
         <>
-          <div className="flex flex-col items-center gap-1 sm:gap-2">
-            <div className="text-xs sm:text-sm uppercase tracking-widest text-neutral-500">
-              {engineState.kind === 'idle'
-                ? 'Ready'
-                : engineState.kind === 'prompting'
-                ? 'Prompting…'
-                : engineState.kind === 'listening'
-                ? engineState.recorded
-                  ? 'Try again'
-                  : 'Listening…'
-                : 'Feedback'}
-            </div>
-            <div className="text-7xl sm:text-[140px] leading-none font-display font-bold text-brand drop-shadow">
-              {currentNoteLarge}
-            </div>
-            {currentText && (
-              <div className="text-base sm:text-xl text-neutral-300">{currentText}</div>
-            )}
-            {engineState.kind === 'listening' && engineState.lastWrongMidi !== undefined && (
-              <div className="text-sm text-red-400">
-                You played {midiToNoteName(engineState.lastWrongMidi, engineState.useFlats)} — find the correct position
-              </div>
-            )}
-            {engineState.kind === 'feedback' && (
-              <div className="text-sm text-neutral-400">
-                You played{' '}
-                {midiToNoteName(engineState.result.playedMidi, engineState.result.useFlats)} —{' '}
-                {engineState.result.correct ? '✓ correct' : '✗ wrong'} in{' '}
-                {(engineState.result.ms / 1000).toFixed(2)}s
-              </div>
-            )}
-          </div>
+          <ChordPromptDisplay state={engineState} />
 
           <div className="flex justify-end">
             <button
@@ -273,14 +235,7 @@ function NoteTrainingScreen() {
               minFret={cfg.minFret}
               maxFret={cfg.maxFret}
               highlights={highlights}
-              highlightedString={highlightedString}
-              useFlats={
-                engineState.kind === 'prompting' || engineState.kind === 'listening'
-                  ? engineState.useFlats
-                  : engineState.kind === 'feedback'
-                  ? engineState.result.useFlats
-                  : false
-              }
+              useFlats={useFlats}
             />
           </div>
 
@@ -345,6 +300,103 @@ function NoteTrainingScreen() {
   );
 }
 
+function ChordPromptDisplay({ state }: { state: ChordEngineState }) {
+  if (state.kind === 'idle') {
+    return (
+      <div className="flex flex-col items-center gap-1 sm:gap-2">
+        <div className="text-xs sm:text-sm uppercase tracking-widest text-neutral-500">Ready</div>
+        <div className="text-7xl sm:text-[140px] leading-none font-display font-bold text-brand drop-shadow">
+          —
+        </div>
+      </div>
+    );
+  }
+
+  if (state.kind === 'done') return null;
+
+  const { chord, displayName } = state;
+  const toneCount = chord.chordType.intervals.length;
+
+  let statusText: string;
+  let toneLabel: string | null = null;
+  let toneIndex = 0;
+  let completedCount = 0;
+
+  if (state.kind === 'prompting') {
+    statusText = 'Prompting…';
+  } else if (state.kind === 'listening') {
+    statusText = state.recorded ? 'Try again' : 'Listening…';
+    toneLabel = state.toneLabel;
+    toneIndex = state.toneIndex;
+    completedCount = state.completedTones.length;
+  } else if (state.kind === 'tone-feedback') {
+    statusText = 'Correct!';
+    toneIndex = state.toneIndex;
+    completedCount = state.completedTones.length;
+  } else {
+    // feedback
+    statusText = state.allCorrectFirstTry ? 'All tones correct!' : 'Round complete';
+    completedCount = toneCount;
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1 sm:gap-2">
+      <div className="text-xs sm:text-sm uppercase tracking-widest text-neutral-500">
+        {statusText}
+      </div>
+      <div className="text-5xl sm:text-[100px] leading-none font-display font-bold text-brand drop-shadow">
+        {displayName}
+      </div>
+      {toneLabel && (
+        <div className="text-2xl sm:text-4xl font-bold text-neutral-100 mt-1">
+          Play: {toneLabel}
+        </div>
+      )}
+      <ToneDots total={toneCount} completed={completedCount} current={toneLabel ? toneIndex : -1} labels={chord.chordType.toneLabels} />
+      {state.kind === 'listening' && state.lastWrongPitchClass !== undefined && (
+        <div className="text-sm text-red-400">
+          Wrong note — find the {state.toneLabel}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToneDots({
+  total,
+  completed,
+  current,
+  labels,
+}: {
+  total: number;
+  completed: number;
+  current: number;
+  labels: string[];
+}) {
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      {Array.from({ length: total }).map((_, i) => {
+        const isCompleted = i < completed;
+        const isCurrent = i === current;
+        return (
+          <div key={i} className="flex flex-col items-center gap-1">
+            <div
+              className={`h-3 w-3 rounded-full transition-colors ${
+                isCompleted
+                  ? 'bg-green-500'
+                  : isCurrent
+                  ? 'bg-brand ring-2 ring-brand/50'
+                  : 'bg-neutral-700'
+              }`}
+            />
+            <span className="text-[10px] text-neutral-500">{labels[i]}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function DetectedCard({
   detected,
   micOpen,
@@ -372,48 +424,48 @@ function DetectedCard({
   );
 }
 
-function progressFor(state: EngineState, total: number, correct: number) {
+function chordProgressFor(state: ChordEngineState, total: number, correct: number) {
   if (state.kind === 'idle') return { round: 0, total, correct: 0 };
   if (state.kind === 'done') {
     return {
       round: state.results.length,
       total,
-      correct: state.results.filter((r) => r.correct).length,
+      correct: state.results.filter((r) => r.allCorrectFirstTry).length,
     };
   }
   const round = 'round' in state ? state.round : 0;
   return { round, total, correct };
 }
 
-function SessionSummary({
+function ChordSessionSummary({
   results,
-  tuning,
   onDone,
 }: {
-  results: RoundResult[];
-  tuning: import('../music/tunings').TuningId;
+  results: ChordRoundResult[];
   onDone: () => void;
 }) {
   const total = results.length;
-  const correct = results.filter((r) => r.correct).length;
-  const avgMs = total > 0 ? results.reduce((a, b) => a + b.ms, 0) / total : 0;
-  const wrong = results.filter((r) => !r.correct).slice(0, 5);
+  const correct = results.filter((r) => r.allCorrectFirstTry).length;
+  const totalTones = results.reduce((a, r) => a + r.tones.length, 0);
+  const correctTones = results.reduce((a, r) => a + r.tones.filter((t) => t.correct).length, 0);
+  const avgMs = totalTones > 0 ? results.reduce((a, r) => a + r.totalMs, 0) / totalTones : 0;
+  const missed = results.filter((r) => !r.allCorrectFirstTry).slice(0, 5);
 
   return (
     <div className="flex flex-col items-center gap-6">
       <h2 className="text-2xl sm:text-3xl font-bold text-brand">Session complete</h2>
       <div className="flex gap-4 sm:gap-8 text-center">
-        <Stat label="Accuracy" value={`${total === 0 ? 0 : Math.round((correct / total) * 100)}%`} />
-        <Stat label="Avg time" value={`${(avgMs / 1000).toFixed(2)}s`} />
-        <Stat label="Notes" value={`${correct}/${total}`} />
+        <StatBlock label="Chords" value={`${correct}/${total}`} />
+        <StatBlock label="Tones" value={`${totalTones === 0 ? 0 : Math.round((correctTones / totalTones) * 100)}%`} />
+        <StatBlock label="Avg time" value={`${(avgMs / 1000).toFixed(2)}s`} />
       </div>
-      {wrong.length > 0 && (
+      {missed.length > 0 && (
         <div className="w-full max-w-md">
-          <div className="text-sm uppercase tracking-widest text-neutral-500 mb-2">Missed</div>
+          <div className="text-sm uppercase tracking-widest text-neutral-500 mb-2">Struggled with</div>
           <ul className="space-y-1">
-            {wrong.map((r, i) => (
+            {missed.map((r, i) => (
               <li key={i} className="text-neutral-300 text-sm">
-                {describeRound(tuning, r, r.useFlats)}
+                {describeChordRound(r)}
               </li>
             ))}
           </ul>
@@ -429,7 +481,7 @@ function SessionSummary({
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function StatBlock({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div className="text-2xl sm:text-4xl font-bold">{value}</div>

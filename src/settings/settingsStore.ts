@@ -3,6 +3,9 @@
 import { create } from 'zustand';
 import { instrumentOf, tuningsFor, type Instrument, type TuningId } from '../music/tunings';
 import type { PromptStyle } from '../game/sessionEngine';
+import { DEFAULT_ENABLED_CHORDS } from '../music/chords';
+
+export type TrainingMode = 'notes' | 'chords';
 
 export interface Settings {
   instrument: Instrument;
@@ -15,6 +18,9 @@ export interface Settings {
   maxFret: number;
   showHint: boolean;
   inputDeviceId: string | null;
+  trainingMode: TrainingMode;
+  chordsPerSession: number;
+  enabledChordTypes: string[];
 }
 
 /** Default max fret per instrument (min always starts at 0). */
@@ -34,9 +40,13 @@ const DEFAULTS: Settings = {
   maxFret: DEFAULT_MAX_FRET.bass,
   showHint: false,
   inputDeviceId: null,
+  trainingMode: 'notes',
+  chordsPerSession: 10,
+  enabledChordTypes: [...DEFAULT_ENABLED_CHORDS],
 };
 
-const STORAGE_KEY = 'fretecho:settings:v2';
+const STORAGE_KEY = 'fretecho:settings:v3';
+const V2_KEY = 'fretecho:settings:v2';
 const LEGACY_KEY = 'fretecho:settings:v1';
 
 function load(): Settings {
@@ -44,6 +54,13 @@ function load(): Settings {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) };
+    }
+    // Migrate from v2 (no chord settings).
+    const v2 = localStorage.getItem(V2_KEY);
+    if (v2) {
+      const migrated = { ...DEFAULTS, ...(JSON.parse(v2) as Partial<Settings>) };
+      persist(migrated);
+      return migrated;
     }
     // Migrate from v1 (had `bass: '4-string' | '5-string'`).
     const legacy = localStorage.getItem(LEGACY_KEY);
@@ -57,6 +74,7 @@ function load(): Settings {
         tuning,
       };
       delete (migrated as unknown as { bass?: unknown }).bass;
+      persist(migrated);
       return migrated;
     }
     return DEFAULTS;
@@ -114,6 +132,9 @@ function persist(s: Settings) {
     maxFret,
     showHint,
     inputDeviceId,
+    trainingMode,
+    chordsPerSession,
+    enabledChordTypes,
   } = s;
   localStorage.setItem(
     STORAGE_KEY,
@@ -128,6 +149,9 @@ function persist(s: Settings) {
       maxFret,
       showHint,
       inputDeviceId,
+      trainingMode,
+      chordsPerSession,
+      enabledChordTypes,
     })
   );
 }

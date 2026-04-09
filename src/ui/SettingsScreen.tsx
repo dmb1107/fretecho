@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useSettings } from '../settings/settingsStore';
 import { listInputDevices } from '../audio/micInput';
 import { tuningsFor } from '../music/tunings';
+import { CHORD_TYPES, CHORD_TYPE_IDS } from '../music/chords';
 
 export function SettingsScreen() {
   const s = useSettings();
@@ -78,6 +79,42 @@ export function SettingsScreen() {
         <Toggle label="Allow sharps/flats" value={s.allowAccidentals} onChange={(v) => s.set('allowAccidentals', v)} />
         <Toggle label="Focus on weak spots" value={s.focusWeakSpots} onChange={(v) => s.set('focusWeakSpots', v)} />
         <Toggle label="Show hint on fretboard" value={s.showHint} onChange={(v) => s.set('showHint', v)} />
+      </Section>
+
+      <Section title="Chord training">
+        <Field label="Chords per session">
+          <input
+            type="number"
+            min={1}
+            max={200}
+            value={s.chordsPerSession}
+            onChange={(e) => s.set('chordsPerSession', Math.max(1, parseInt(e.target.value) || 1))}
+            className="w-24 bg-neutral-900 border border-neutral-700 rounded px-2 py-1"
+          />
+        </Field>
+        <div className="flex flex-col gap-2">
+          <span className="text-neutral-300">Chord types</span>
+          {CHORD_TYPE_IDS.map((id) => {
+            const ct = CHORD_TYPES[id];
+            const enabled = s.enabledChordTypes.includes(id);
+            return (
+              <label key={id} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={() => {
+                    const next = enabled
+                      ? s.enabledChordTypes.filter((t) => t !== id)
+                      : [...s.enabledChordTypes, id];
+                    // Don't allow disabling all chord types.
+                    if (next.length > 0) s.set('enabledChordTypes', next);
+                  }}
+                />
+                <span className="text-neutral-200">{ct.label}</span>
+              </label>
+            );
+          })}
+        </div>
       </Section>
 
       <Section title="Prompt">
