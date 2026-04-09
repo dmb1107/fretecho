@@ -55,9 +55,9 @@ export function StatsScreen() {
     .reduce((a, [, b]) => a + b.correct, 0);
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-5xl mx-auto">
+    <div className="flex flex-col gap-3 p-3 sm:gap-6 sm:p-6 max-w-5xl mx-auto">
       <div className="flex items-end justify-between">
-        <h2 className="text-2xl font-bold">Proficiency heatmap</h2>
+        <h2 className="text-lg sm:text-2xl font-bold">Proficiency heatmap</h2>
         <button
           onClick={() => {
             if (confirm('Reset all stats?')) reset();
@@ -68,7 +68,7 @@ export function StatsScreen() {
         </button>
       </div>
 
-      <div className="flex gap-6 text-sm">
+      <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-6 text-sm">
         <Card label="Attempts" value={String(totalAttempts)} />
         <Card label="Correct" value={String(totalCorrect)} />
         <Card
@@ -108,10 +108,10 @@ export function StatsScreen() {
         )}
       </div>
 
-      <div className="flex items-center gap-3 text-xs text-neutral-500">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-neutral-500">
         <span>Low</span>
         <div
-          className="h-3 w-40 rounded"
+          className="h-3 w-24 sm:w-40 rounded"
           style={{ background: 'linear-gradient(to right, hsl(0,70%,50%), hsl(65,70%,50%), hsl(130,70%,50%))' }}
         />
         <span>High</span>
@@ -123,9 +123,9 @@ export function StatsScreen() {
 
 function Card({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded border border-neutral-800 bg-neutral-900/40 px-4 py-2">
-      <div className="text-xs uppercase tracking-widest text-neutral-500">{label}</div>
-      <div className="text-2xl font-bold">{value}</div>
+    <div className="rounded border border-neutral-800 bg-neutral-900/40 px-2 py-1.5 sm:px-4 sm:py-2">
+      <div className="text-[10px] sm:text-xs uppercase tracking-widest text-neutral-500">{label}</div>
+      <div className="text-lg sm:text-2xl font-bold">{value}</div>
     </div>
   );
 }

@@ -22,8 +22,8 @@ export function SettingsScreen() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-8 p-6 max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold">Settings</h2>
+    <div className="flex flex-col gap-4 p-3 sm:gap-8 sm:p-6 max-w-2xl mx-auto">
+      <h2 className="text-lg sm:text-2xl font-bold">Settings</h2>
 
       <Section title="Instrument">
         <Radio

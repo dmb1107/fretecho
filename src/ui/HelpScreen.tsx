@@ -2,9 +2,9 @@
 
 export function HelpScreen() {
   return (
-    <div className="flex flex-col gap-8 p-6 max-w-3xl mx-auto text-neutral-300">
+    <div className="flex flex-col gap-4 p-3 sm:gap-8 sm:p-6 max-w-3xl mx-auto text-neutral-300">
       <header className="flex flex-col gap-2">
-        <h2 className="text-3xl font-bold text-brand">How to use FretEcho</h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-brand">How to use FretEcho</h2>
         <p className="text-neutral-400">
           FretEcho calls out a note; you play it on your instrument.
         </p>

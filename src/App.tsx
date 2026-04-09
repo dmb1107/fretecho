@@ -11,12 +11,12 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b border-neutral-800 bg-neutral-950/80 backdrop-blur">
-        <div className="max-w-5xl mx-auto flex items-center justify-between px-6 py-3">
+        <div className="max-w-5xl mx-auto flex items-center justify-between px-3 py-2 sm:px-6 sm:py-3">
           <div className="flex items-baseline gap-2">
-            <span className="text-brand text-2xl font-bold">FretEcho</span>
-            <span className="text-neutral-500 text-xs">Fretboard trainer</span>
+            <span className="text-brand text-lg sm:text-2xl font-bold">FretEcho</span>
+            <span className="text-neutral-500 text-xs hidden sm:inline">Fretboard trainer</span>
           </div>
-          <nav className="flex gap-1">
+          <nav className="flex gap-0.5 sm:gap-1">
             <TabButton current={tab} tab="train" onClick={() => setTab('train')}>
               Train
             </TabButton>
@@ -57,7 +57,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-1.5 rounded text-sm font-medium transition ${
+      className={`px-2.5 py-1 sm:px-4 sm:py-1.5 rounded text-xs sm:text-sm font-medium transition ${
         active ? 'bg-brand text-black' : 'text-neutral-300 hover:bg-neutral-800'
       }`}
     >

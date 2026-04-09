@@ -188,7 +188,7 @@ export function TrainingScreen() {
       : '—';
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-5xl mx-auto">
+    <div className="flex flex-col gap-3 p-3 sm:gap-6 sm:p-6 max-w-5xl mx-auto">
       <FeedbackFlash kind={flash} />
 
       {error && (
@@ -201,8 +201,8 @@ export function TrainingScreen() {
         <SessionSummary results={engineState.results} tuning={cfg.tuning} onDone={() => setEngineState({ kind: 'idle' })} />
       ) : (
         <>
-          <div className="flex flex-col items-center gap-2">
-            <div className="text-sm uppercase tracking-widest text-neutral-500">
+          <div className="flex flex-col items-center gap-1 sm:gap-2">
+            <div className="text-xs sm:text-sm uppercase tracking-widest text-neutral-500">
               {engineState.kind === 'idle'
                 ? 'Ready'
                 : engineState.kind === 'prompting'
@@ -213,11 +213,11 @@ export function TrainingScreen() {
                   : 'Listening…'
                 : 'Feedback'}
             </div>
-            <div className="text-[140px] leading-none font-display font-bold text-brand drop-shadow">
+            <div className="text-7xl sm:text-[140px] leading-none font-display font-bold text-brand drop-shadow">
               {currentNoteLarge}
             </div>
             {currentText && (
-              <div className="text-xl text-neutral-300">{currentText}</div>
+              <div className="text-base sm:text-xl text-neutral-300">{currentText}</div>
             )}
             {engineState.kind === 'listening' && engineState.lastWrongMidi !== undefined && (
               <div className="text-sm text-red-400">
@@ -273,8 +273,8 @@ export function TrainingScreen() {
 
           <DetectedCard detected={detected} micOpen={micOpen} />
 
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-4 text-sm text-neutral-400">
+          <div className="flex flex-col gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-neutral-400">
               <div className="flex-1">
                 <div className="h-2 rounded bg-neutral-800 overflow-hidden">
                   <div
@@ -343,13 +343,13 @@ function DetectedCard({
   const freq = detected ? `${detected.frequency.toFixed(1)} Hz` : '—';
   const cents = detected ? `${detected.cents >= 0 ? '+' : ''}${detected.cents.toFixed(0)} ¢` : '—';
   return (
-    <div className="rounded border border-neutral-800 bg-neutral-900/40 px-4 py-3">
+    <div className="rounded border border-neutral-800 bg-neutral-900/40 px-3 py-2 sm:px-4 sm:py-3">
       <div className="flex items-center justify-between gap-4">
         <div className="text-xs uppercase tracking-widest text-neutral-500">Detected</div>
         {!micOpen && <div className="text-xs text-neutral-500">Mic is off</div>}
       </div>
-      <div className="flex items-baseline gap-6 mt-1">
-        <div className="text-5xl font-bold text-neutral-100 min-w-[4ch]">{name ?? '—'}</div>
+      <div className="flex items-baseline gap-3 sm:gap-6 mt-1">
+        <div className="text-3xl sm:text-5xl font-bold text-neutral-100 min-w-[4ch]">{name ?? '—'}</div>
         <div className="flex flex-col text-xs text-neutral-400">
           <span>{freq}</span>
           <span>{cents}</span>
@@ -388,8 +388,8 @@ function SessionSummary({
 
   return (
     <div className="flex flex-col items-center gap-6">
-      <h2 className="text-3xl font-bold text-brand">Session complete</h2>
-      <div className="flex gap-8 text-center">
+      <h2 className="text-2xl sm:text-3xl font-bold text-brand">Session complete</h2>
+      <div className="flex gap-4 sm:gap-8 text-center">
         <Stat label="Accuracy" value={`${total === 0 ? 0 : Math.round((correct / total) * 100)}%`} />
         <Stat label="Avg time" value={`${(avgMs / 1000).toFixed(2)}s`} />
         <Stat label="Notes" value={`${correct}/${total}`} />
@@ -419,7 +419,7 @@ function SessionSummary({
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-4xl font-bold">{value}</div>
+      <div className="text-2xl sm:text-4xl font-bold">{value}</div>
       <div className="text-xs uppercase tracking-widest text-neutral-500 mt-1">{label}</div>
     </div>
   );
