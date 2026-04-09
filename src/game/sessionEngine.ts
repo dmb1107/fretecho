@@ -23,7 +23,6 @@ export interface SessionConfig {
   focusWeakSpots: boolean;
   minFret: number;
   maxFret: number;
-  useFlats: boolean;
 }
 
 export interface RoundResult {
@@ -32,11 +31,20 @@ export interface RoundResult {
   playedMidi: number;
   correct: boolean;
   ms: number;
+  /** Whether this round's note was displayed/spoken using flats (vs sharps). */
+  useFlats: boolean;
 }
 
 export type EngineState =
   | { kind: 'idle' }
-  | { kind: 'prompting'; round: number; target: Position; expectedMidi: number; text: string }
+  | {
+      kind: 'prompting';
+      round: number;
+      target: Position;
+      expectedMidi: number;
+      text: string;
+      useFlats: boolean;
+    }
   | {
       kind: 'listening';
       round: number;
@@ -46,6 +54,7 @@ export type EngineState =
       startedAt: number;
       recorded: boolean;
       lastWrongMidi?: number;
+      useFlats: boolean;
     }
   | { kind: 'feedback'; round: number; result: RoundResult }
   | { kind: 'done'; results: RoundResult[] };
@@ -111,10 +120,14 @@ export class SessionEngine {
       last
     );
     const expectedMidi = noteAt(this.cfg.bass, target.stringIndex, target.fret);
-    const text = this.promptText(target, expectedMidi);
-    const speakTextStr = this.speakText(target, expectedMidi);
+    // Randomly alternate between sharp/flat naming each round (only matters
+    // when the note is an accidental). For natural notes both spellings are
+    // identical so the coin flip is harmless.
+    const useFlats = Math.random() < 0.5;
+    const text = this.promptText(target, expectedMidi, useFlats);
+    const speakTextStr = this.speakText(target, expectedMidi, useFlats);
 
-    this.setState({ kind: 'prompting', round: this.round, target, expectedMidi, text });
+    this.setState({ kind: 'prompting', round: this.round, target, expectedMidi, text, useFlats });
 
     // Pause the pitch loop so the mic doesn't detect the synthesized speech
     // (speech formants sit in the bass frequency range and pitchy locks on).
@@ -138,19 +151,20 @@ export class SessionEngine {
       text,
       startedAt: performance.now(),
       recorded: false,
+      useFlats,
     });
   }
 
   private judge(playedMidi: number) {
     if (this.state.kind !== 'listening') return;
-    const { target, expectedMidi, startedAt, recorded, round, text, lastWrongMidi } = this.state;
+    const { target, expectedMidi, startedAt, recorded, round, text, lastWrongMidi, useFlats } = this.state;
     const ms = performance.now() - startedAt;
     // Note-name validation only: accept any octave.
     const correct = ((playedMidi % 12) + 12) % 12 === ((expectedMidi % 12) + 12) % 12;
 
     // Only the first attempt of a round is recorded in stats.
     if (!recorded) {
-      const result: RoundResult = { position: target, expectedMidi, playedMidi, correct, ms };
+      const result: RoundResult = { position: target, expectedMidi, playedMidi, correct, ms, useFlats };
       this.results.push(result);
       this.deps.recordStat(positionKey(this.cfg.bass, target), correct, ms);
     }
@@ -162,8 +176,8 @@ export class SessionEngine {
       // Use the originally recorded result if we already had a wrong first
       // attempt — stats should reflect that the round was initially missed.
       const headResult: RoundResult = recorded
-        ? { position: target, expectedMidi, playedMidi, correct: false, ms }
-        : { position: target, expectedMidi, playedMidi, correct: true, ms };
+        ? { position: target, expectedMidi, playedMidi, correct: false, ms, useFlats }
+        : { position: target, expectedMidi, playedMidi, correct: true, ms, useFlats };
       this.setState({ kind: 'feedback', round, result: headResult });
       setTimeout(() => {
         if (!this.stopped) this.nextRound();
@@ -188,6 +202,7 @@ export class SessionEngine {
       startedAt,
       recorded: true,
       lastWrongMidi: playedMidi,
+      useFlats,
     });
 
     // Brief pause so the error tone bleed doesn't trigger another judgment,
@@ -202,8 +217,8 @@ export class SessionEngine {
   }
 
   /** Human-readable prompt for display in the UI. */
-  private promptText(pos: Position, expectedMidi: number): string {
-    const fullName = midiToNoteName(expectedMidi, this.cfg.useFlats);
+  private promptText(pos: Position, expectedMidi: number, useFlats: boolean): string {
+    const fullName = midiToNoteName(expectedMidi, useFlats);
     const classOnly = fullName.replace(/-?\d+$/, '');
     const str = stringLabel(this.cfg.bass, pos.stringIndex);
     switch (this.cfg.promptStyle) {
@@ -218,8 +233,8 @@ export class SessionEngine {
   }
 
   /** TTS-friendly prompt with phonetic hacks (e.g. "A." for the letter A). */
-  private speakText(pos: Position, expectedMidi: number): string {
-    const fullName = midiToNoteName(expectedMidi, this.cfg.useFlats);
+  private speakText(pos: Position, expectedMidi: number, useFlats: boolean): string {
+    const fullName = midiToNoteName(expectedMidi, useFlats);
     const spokenWithOctave = speakableNote(fullName);
     const spokenClassOnly = speakableNoteClass(fullName);
     const str = stringLabel(this.cfg.bass, pos.stringIndex);

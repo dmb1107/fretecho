@@ -45,7 +45,6 @@ export function TrainingScreen() {
       focusWeakSpots: settings.focusWeakSpots,
       minFret: settings.minFret,
       maxFret: settings.maxFret,
-      useFlats: settings.useFlats,
     }),
     [settings]
   );
@@ -178,14 +177,14 @@ export function TrainingScreen() {
     engineState.kind === 'prompting' || engineState.kind === 'listening'
       ? engineState.text
       : engineState.kind === 'feedback'
-      ? describeRound(cfg.bass, engineState.result, cfg.useFlats)
+      ? describeRound(cfg.bass, engineState.result, engineState.result.useFlats)
       : null;
 
   const currentNoteLarge =
     engineState.kind === 'prompting' || engineState.kind === 'listening'
-      ? midiToNoteClass(engineState.expectedMidi, cfg.useFlats)
+      ? midiToNoteClass(engineState.expectedMidi, engineState.useFlats)
       : engineState.kind === 'feedback'
-      ? midiToNoteClass(engineState.result.expectedMidi, cfg.useFlats)
+      ? midiToNoteClass(engineState.result.expectedMidi, engineState.result.useFlats)
       : '—';
 
   return (
@@ -199,7 +198,7 @@ export function TrainingScreen() {
       )}
 
       {engineState.kind === 'done' ? (
-        <SessionSummary results={engineState.results} bass={cfg.bass} useFlats={cfg.useFlats} onAgain={startSession} />
+        <SessionSummary results={engineState.results} bass={cfg.bass} onAgain={startSession} />
       ) : (
         <>
           <div className="flex flex-col items-center gap-2">
@@ -222,13 +221,13 @@ export function TrainingScreen() {
             )}
             {engineState.kind === 'listening' && engineState.lastWrongMidi !== undefined && (
               <div className="text-sm text-red-400">
-                You played {midiToNoteName(engineState.lastWrongMidi, cfg.useFlats)} — find the correct position
+                You played {midiToNoteName(engineState.lastWrongMidi, engineState.useFlats)} — find the correct position
               </div>
             )}
             {engineState.kind === 'feedback' && (
               <div className="text-sm text-neutral-400">
                 You played{' '}
-                {midiToNoteName(engineState.result.playedMidi, cfg.useFlats)} —{' '}
+                {midiToNoteName(engineState.result.playedMidi, engineState.result.useFlats)} —{' '}
                 {engineState.result.correct ? '✓ correct' : '✗ wrong'} in{' '}
                 {(engineState.result.ms / 1000).toFixed(2)}s
               </div>
@@ -262,11 +261,17 @@ export function TrainingScreen() {
               maxFret={cfg.maxFret}
               highlights={highlights}
               highlightedString={highlightedString}
-              useFlats={cfg.useFlats}
+              useFlats={
+                engineState.kind === 'prompting' || engineState.kind === 'listening'
+                  ? engineState.useFlats
+                  : engineState.kind === 'feedback'
+                  ? engineState.result.useFlats
+                  : false
+              }
             />
           </div>
 
-          <DetectedCard detected={detected} useFlats={cfg.useFlats} micOpen={micOpen} />
+          <DetectedCard detected={detected} micOpen={micOpen} />
 
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-4 text-sm text-neutral-400">
@@ -329,14 +334,12 @@ export function TrainingScreen() {
 
 function DetectedCard({
   detected,
-  useFlats,
   micOpen,
 }: {
   detected: { midi: number; frequency: number; cents: number } | null;
-  useFlats: boolean;
   micOpen: boolean;
 }) {
-  const name = detected ? midiToNoteName(detected.midi, useFlats) : null;
+  const name = detected ? midiToNoteName(detected.midi, false) : null;
   const freq = detected ? `${detected.frequency.toFixed(1)} Hz` : '—';
   const cents = detected ? `${detected.cents >= 0 ? '+' : ''}${detected.cents.toFixed(0)} ¢` : '—';
   return (
@@ -372,12 +375,10 @@ function progressFor(state: EngineState, total: number, correct: number) {
 function SessionSummary({
   results,
   bass,
-  useFlats,
   onAgain,
 }: {
   results: RoundResult[];
   bass: import('../music/tunings').BassType;
-  useFlats: boolean;
   onAgain: () => void;
 }) {
   const total = results.length;
@@ -399,7 +400,7 @@ function SessionSummary({
           <ul className="space-y-1">
             {wrong.map((r, i) => (
               <li key={i} className="text-neutral-300 text-sm">
-                {describeRound(bass, r, useFlats)}
+                {describeRound(bass, r, r.useFlats)}
               </li>
             ))}
           </ul>

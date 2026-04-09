@@ -68,12 +68,6 @@ export function SettingsScreen() {
           </div>
         </Field>
         <Toggle label="Allow sharps/flats" value={s.allowAccidentals} onChange={(v) => s.set('allowAccidentals', v)} />
-        <Toggle
-          label="Display accidentals as flats"
-          value={s.useFlats}
-          onChange={(v) => s.set('useFlats', v)}
-          disabled={!s.allowAccidentals}
-        />
         <Toggle label="Focus on weak spots" value={s.focusWeakSpots} onChange={(v) => s.set('focusWeakSpots', v)} />
         <Toggle label="Show hint on fretboard" value={s.showHint} onChange={(v) => s.set('showHint', v)} />
       </Section>

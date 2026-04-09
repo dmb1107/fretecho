@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { TrainingScreen } from './ui/TrainingScreen';
 import { StatsScreen } from './ui/StatsScreen';
 import { SettingsScreen } from './ui/SettingsScreen';
+import { HelpScreen } from './ui/HelpScreen';
 
-type Tab = 'train' | 'stats' | 'settings';
+type Tab = 'train' | 'stats' | 'settings' | 'help';
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('train');
@@ -25,6 +26,9 @@ export default function App() {
             <TabButton current={tab} tab="settings" onClick={() => setTab('settings')}>
               Settings
             </TabButton>
+            <TabButton current={tab} tab="help" onClick={() => setTab('help')}>
+              Help
+            </TabButton>
           </nav>
         </div>
       </header>
@@ -32,6 +36,7 @@ export default function App() {
         {tab === 'train' && <TrainingScreen />}
         {tab === 'stats' && <StatsScreen />}
         {tab === 'settings' && <SettingsScreen />}
+        {tab === 'help' && <HelpScreen />}
       </main>
     </div>
   );

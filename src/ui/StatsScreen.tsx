@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useSettings } from '../settings/settingsStore';
 import { proficiency, useStatsStore, keyFor } from '../stats/statsStore';
 import { Fretboard, type FretboardHighlight } from './Fretboard';
-import { allPositions } from '../music/tunings';
+import { allPositions, noteAt } from '../music/tunings';
+import { midiToNoteClass } from '../music/notes';
 
 // Red -> Yellow -> Green gradient.
 function colorForScore(score: number | null): string {
@@ -13,6 +14,13 @@ function colorForScore(score: number | null): string {
   // Interpolate via HSL from 0° (red) to 130° (green).
   const hue = s * 130;
   return `hsl(${hue}, 70%, 50%)`;
+}
+
+// Pick a legible text color for a given cell background.
+// Unseen (dark gray) needs light text; all gradient colors have 50% HSL
+// lightness, so near-black text reads well across red/yellow/green.
+function textColorForScore(score: number | null): string {
+  return score === null ? '#e5e7eb' : '#0b0b0b';
 }
 
 export function StatsScreen() {
@@ -26,7 +34,11 @@ export function StatsScreen() {
   for (const p of positions) {
     const stat = stats[keyFor(settings.bass, p.stringIndex, p.fret)];
     const score = proficiency(stat);
-    highlights.set(`${p.stringIndex}:${p.fret}`, { color: colorForScore(score) });
+    highlights.set(`${p.stringIndex}:${p.fret}`, {
+      color: colorForScore(score),
+      label: midiToNoteClass(noteAt(settings.bass, p.stringIndex, p.fret)),
+      textColor: textColorForScore(score),
+    });
   }
 
   const hoverStat = hover ? stats[keyFor(settings.bass, hover.s, hover.f)] : undefined;
@@ -64,7 +76,6 @@ export function StatsScreen() {
           minFret={settings.minFret}
           maxFret={settings.maxFret}
           highlights={highlights}
-          useFlats={settings.useFlats}
           onCellClick={(s, f) => setHover({ s, f })}
         />
       </div>
@@ -73,7 +84,7 @@ export function StatsScreen() {
         {hover && hoverStat ? (
           <div className="text-sm text-neutral-300">
             <div className="font-semibold">
-              String {hover.s + 1}, Fret {hover.f}
+              String {hover.s + 1}, Fret {hover.f} — {midiToNoteClass(noteAt(settings.bass, hover.s, hover.f))}
             </div>
             <div>
               {hoverStat.correct} / {hoverStat.attempts} correct ({Math.round((hoverStat.correct / hoverStat.attempts) * 100)}%),
@@ -83,7 +94,7 @@ export function StatsScreen() {
           </div>
         ) : hover ? (
           <div className="text-sm text-neutral-500">
-            String {hover.s + 1}, Fret {hover.f} — no attempts yet
+            String {hover.s + 1}, Fret {hover.f} — {midiToNoteClass(noteAt(settings.bass, hover.s, hover.f))} — no attempts yet
           </div>
         ) : (
           <div className="text-sm text-neutral-500">Click a position to see its stats.</div>

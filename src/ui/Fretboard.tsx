@@ -8,6 +8,7 @@ export interface FretboardHighlight {
   color: string;
   label?: string;
   ring?: boolean;
+  textColor?: string;
 }
 
 export interface FretboardProps {
@@ -217,7 +218,7 @@ export function Fretboard(props: FretboardProps) {
                   y={cy + 4}
                   textAnchor="middle"
                   fontSize={12}
-                  fill={hl ? '#0b0b0b' : '#9ca3af'}
+                  fill={hl?.textColor ?? (hl ? '#0b0b0b' : '#9ca3af')}
                   fontWeight={hl ? 700 : 400}
                 >
                   {label}

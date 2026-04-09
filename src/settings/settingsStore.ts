@@ -8,7 +8,6 @@ export interface Settings {
   bass: BassType;
   notesPerSession: number;
   allowAccidentals: boolean;
-  useFlats: boolean;
   promptStyle: PromptStyle;
   focusWeakSpots: boolean;
   minFret: number;
@@ -21,7 +20,6 @@ const DEFAULTS: Settings = {
   bass: '4-string',
   notesPerSession: 20,
   allowAccidentals: false,
-  useFlats: false,
   promptStyle: 'note-and-string',
   focusWeakSpots: false,
   minFret: 0,
@@ -61,9 +59,9 @@ export const useSettings = create<SettingsState>((set, get) => ({
 }));
 
 function persist(s: Settings) {
-  const { bass, notesPerSession, allowAccidentals, useFlats, promptStyle, focusWeakSpots, minFret, maxFret, showHint, inputDeviceId } = s;
+  const { bass, notesPerSession, allowAccidentals, promptStyle, focusWeakSpots, minFret, maxFret, showHint, inputDeviceId } = s;
   localStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify({ bass, notesPerSession, allowAccidentals, useFlats, promptStyle, focusWeakSpots, minFret, maxFret, showHint, inputDeviceId })
+    JSON.stringify({ bass, notesPerSession, allowAccidentals, promptStyle, focusWeakSpots, minFret, maxFret, showHint, inputDeviceId })
   );
 }
