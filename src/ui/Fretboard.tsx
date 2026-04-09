@@ -1,7 +1,7 @@
 // Reusable SVG fretboard. Low string at the bottom, high string at the top.
 // Used for training hint display and the stats heatmap.
 
-import { TUNINGS, type BassType, stringLabel, noteAt } from '../music/tunings';
+import { TUNINGS, type TuningId, stringLabel, noteAt } from '../music/tunings';
 import { midiToNoteClass } from '../music/notes';
 
 export interface FretboardHighlight {
@@ -12,7 +12,7 @@ export interface FretboardHighlight {
 }
 
 export interface FretboardProps {
-  bass: BassType;
+  tuning: TuningId;
   minFret: number;
   maxFret: number;
   highlights?: Map<string, FretboardHighlight>; // key = `${stringIndex}:${fret}`
@@ -26,8 +26,8 @@ const INLAYS_SINGLE = [3, 5, 7, 9, 15, 17, 19, 21];
 const INLAYS_DOUBLE = [12, 24];
 
 export function Fretboard(props: FretboardProps) {
-  const { bass, minFret, maxFret, highlights, highlightedString, useFlats, showNoteNames, onCellClick } = props;
-  const numStrings = TUNINGS[bass].length;
+  const { tuning, minFret, maxFret, highlights, highlightedString, useFlats, showNoteNames, onCellClick } = props;
+  const numStrings = TUNINGS[tuning].strings.length;
 
   // If minFret === 0, we render an "open string" column *outside* (left of)
   // the nut. The fretboard body itself only contains fretted positions
@@ -154,7 +154,7 @@ export function Fretboard(props: FretboardProps) {
           fontWeight={highlightedString === s ? 700 : 400}
           textAnchor="end"
         >
-          {stringLabel(bass, s)}
+          {stringLabel(tuning, s)}
         </text>
       ))}
 
@@ -194,7 +194,7 @@ export function Fretboard(props: FretboardProps) {
           const cy = yForStringIndex(s);
           const label =
             hl?.label ??
-            (showNoteNames ? midiToNoteClass(noteAt(bass, s, fret), useFlats) : undefined);
+            (showNoteNames ? midiToNoteClass(noteAt(tuning, s, fret), useFlats) : undefined);
           return (
             <g
               key={`cell-${s}-${fret}`}

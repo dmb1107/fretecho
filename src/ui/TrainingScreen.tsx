@@ -38,7 +38,7 @@ export function TrainingScreen() {
 
   const cfg: SessionConfig = useMemo(
     () => ({
-      bass: settings.bass,
+      tuning: settings.tuning,
       notesPerSession: settings.notesPerSession,
       allowAccidentals: settings.allowAccidentals,
       promptStyle: settings.promptStyle,
@@ -177,7 +177,7 @@ export function TrainingScreen() {
     engineState.kind === 'prompting' || engineState.kind === 'listening'
       ? engineState.text
       : engineState.kind === 'feedback'
-      ? describeRound(cfg.bass, engineState.result, engineState.result.useFlats)
+      ? describeRound(cfg.tuning, engineState.result, engineState.result.useFlats)
       : null;
 
   const currentNoteLarge =
@@ -198,7 +198,7 @@ export function TrainingScreen() {
       )}
 
       {engineState.kind === 'done' ? (
-        <SessionSummary results={engineState.results} bass={cfg.bass} onAgain={startSession} />
+        <SessionSummary results={engineState.results} tuning={cfg.tuning} onAgain={startSession} />
       ) : (
         <>
           <div className="flex flex-col items-center gap-2">
@@ -256,7 +256,7 @@ export function TrainingScreen() {
 
           <div className="flex justify-center">
             <Fretboard
-              bass={cfg.bass}
+              tuning={cfg.tuning}
               minFret={cfg.minFret}
               maxFret={cfg.maxFret}
               highlights={highlights}
@@ -374,11 +374,11 @@ function progressFor(state: EngineState, total: number, correct: number) {
 
 function SessionSummary({
   results,
-  bass,
+  tuning,
   onAgain,
 }: {
   results: RoundResult[];
-  bass: import('../music/tunings').BassType;
+  tuning: import('../music/tunings').TuningId;
   onAgain: () => void;
 }) {
   const total = results.length;
@@ -400,7 +400,7 @@ function SessionSummary({
           <ul className="space-y-1">
             {wrong.map((r, i) => (
               <li key={i} className="text-neutral-300 text-sm">
-                {describeRound(bass, r, r.useFlats)}
+                {describeRound(tuning, r, r.useFlats)}
               </li>
             ))}
           </ul>

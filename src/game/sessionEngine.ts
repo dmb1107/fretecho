@@ -1,7 +1,7 @@
 // Session engine: call-and-response round loop.
 // Stateless-ish — holds internal state but exposes a React-friendly event API.
 
-import type { BassType, Position } from '../music/tunings';
+import type { TuningId, Position } from '../music/tunings';
 import { noteAt, positionKey, stringLabel } from '../music/tunings';
 import { midiToNoteName } from '../music/notes';
 import type { PitchLoop } from '../audio/pitchDetector';
@@ -16,7 +16,7 @@ export type PromptStyle =
   | 'note-only'; // "C1"
 
 export interface SessionConfig {
-  bass: BassType;
+  tuning: TuningId;
   notesPerSession: number;
   allowAccidentals: boolean;
   promptStyle: PromptStyle;
@@ -110,7 +110,7 @@ export class SessionEngine {
     const last = this.state.kind !== 'idle' && 'target' in this.state ? this.state.target : undefined;
     const target = pickNext(
       {
-        bass: this.cfg.bass,
+        tuning: this.cfg.tuning,
         minFret: this.cfg.minFret,
         maxFret: this.cfg.maxFret,
         allowAccidentals: this.cfg.allowAccidentals,
@@ -119,7 +119,7 @@ export class SessionEngine {
       },
       last
     );
-    const expectedMidi = noteAt(this.cfg.bass, target.stringIndex, target.fret);
+    const expectedMidi = noteAt(this.cfg.tuning, target.stringIndex, target.fret);
     // Randomly alternate between sharp/flat naming each round (only matters
     // when the note is an accidental). For natural notes both spellings are
     // identical so the coin flip is harmless.
@@ -166,7 +166,7 @@ export class SessionEngine {
     if (!recorded) {
       const result: RoundResult = { position: target, expectedMidi, playedMidi, correct, ms, useFlats };
       this.results.push(result);
-      this.deps.recordStat(positionKey(this.cfg.bass, target), correct, ms);
+      this.deps.recordStat(positionKey(this.cfg.tuning, target), correct, ms);
     }
 
     if (correct) {
@@ -220,7 +220,7 @@ export class SessionEngine {
   private promptText(pos: Position, expectedMidi: number, useFlats: boolean): string {
     const fullName = midiToNoteName(expectedMidi, useFlats);
     const classOnly = fullName.replace(/-?\d+$/, '');
-    const str = stringLabel(this.cfg.bass, pos.stringIndex);
+    const str = stringLabel(this.cfg.tuning, pos.stringIndex);
     switch (this.cfg.promptStyle) {
       case 'note-only':
         return fullName;
@@ -237,7 +237,7 @@ export class SessionEngine {
     const fullName = midiToNoteName(expectedMidi, useFlats);
     const spokenWithOctave = speakableNote(fullName);
     const spokenClassOnly = speakableNoteClass(fullName);
-    const str = stringLabel(this.cfg.bass, pos.stringIndex);
+    const str = stringLabel(this.cfg.tuning, pos.stringIndex);
     // "A" as a bare letter gets read as the English article ("uh"). Appending
     // a period forces most TTS engines (Google, Microsoft) to read it as the
     // letter name ("ay").
@@ -309,8 +309,8 @@ function octaveWord(n: number): string {
 }
 
 /** Exposed for Stats / session summary. */
-export function describeRound(bass: BassType, r: RoundResult, useFlats: boolean): string {
-  const str = stringLabel(bass, r.position.stringIndex);
+export function describeRound(tuning: TuningId, r: RoundResult, useFlats: boolean): string {
+  const str = stringLabel(tuning, r.position.stringIndex);
   const note = midiToNoteName(r.expectedMidi, useFlats);
   return `${note} (${str} string, fret ${r.position.fret})`;
 }

@@ -1,11 +1,12 @@
 // User-configurable settings, persisted in localStorage.
 
 import { create } from 'zustand';
-import type { BassType } from '../music/tunings';
+import { instrumentOf, tuningsFor, type Instrument, type TuningId } from '../music/tunings';
 import type { PromptStyle } from '../game/sessionEngine';
 
 export interface Settings {
-  bass: BassType;
+  instrument: Instrument;
+  tuning: TuningId;
   notesPerSession: number;
   allowAccidentals: boolean;
   promptStyle: PromptStyle;
@@ -16,25 +17,49 @@ export interface Settings {
   inputDeviceId: string | null;
 }
 
+/** Default max fret per instrument (min always starts at 0). */
+export const DEFAULT_MAX_FRET: Record<Instrument, number> = {
+  bass: 12,
+  guitar: 15,
+};
+
 const DEFAULTS: Settings = {
-  bass: '4-string',
+  instrument: 'bass',
+  tuning: '4-string',
   notesPerSession: 20,
   allowAccidentals: false,
   promptStyle: 'note-and-string',
   focusWeakSpots: false,
   minFret: 0,
-  maxFret: 12,
+  maxFret: DEFAULT_MAX_FRET.bass,
   showHint: true,
   inputDeviceId: null,
 };
 
-const STORAGE_KEY = 'fretecho:settings:v1';
+const STORAGE_KEY = 'fretecho:settings:v2';
+const LEGACY_KEY = 'fretecho:settings:v1';
 
 function load(): Settings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULTS;
-    return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (raw) {
+      return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) };
+    }
+    // Migrate from v1 (had `bass: '4-string' | '5-string'`).
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as Partial<Settings> & { bass?: TuningId };
+      const tuning: TuningId = parsed.bass ?? DEFAULTS.tuning;
+      const migrated: Settings = {
+        ...DEFAULTS,
+        ...parsed,
+        instrument: instrumentOf(tuning),
+        tuning,
+      };
+      delete (migrated as unknown as { bass?: unknown }).bass;
+      return migrated;
+    }
+    return DEFAULTS;
   } catch {
     return DEFAULTS;
   }
@@ -42,15 +67,34 @@ function load(): Settings {
 
 interface SettingsState extends Settings {
   set: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
+  setInstrument: (instrument: Instrument) => void;
   reset: () => void;
 }
 
 export const useSettings = create<SettingsState>((set, get) => ({
   ...load(),
   set: (key, value) => {
-    const next = { ...get(), [key]: value };
+    const next = { ...get(), [key]: value } as Settings;
     persist(next);
     set({ [key]: value } as Partial<SettingsState>);
+  },
+  setInstrument: (instrument) => {
+    const current = get();
+    if (current.instrument === instrument) return;
+
+    // Pick the first tuning for the new instrument.
+    const firstTuning = tuningsFor(instrument)[0].id;
+
+    // Only auto-adjust max fret if the user is on the previous instrument's default.
+    const prevDefault = DEFAULT_MAX_FRET[current.instrument];
+    const maxFret =
+      current.maxFret === prevDefault && current.minFret === 0
+        ? DEFAULT_MAX_FRET[instrument]
+        : current.maxFret;
+
+    const next: Settings = { ...current, instrument, tuning: firstTuning, maxFret };
+    persist(next);
+    set({ instrument, tuning: firstTuning, maxFret });
   },
   reset: () => {
     persist(DEFAULTS);
@@ -59,9 +103,31 @@ export const useSettings = create<SettingsState>((set, get) => ({
 }));
 
 function persist(s: Settings) {
-  const { bass, notesPerSession, allowAccidentals, promptStyle, focusWeakSpots, minFret, maxFret, showHint, inputDeviceId } = s;
+  const {
+    instrument,
+    tuning,
+    notesPerSession,
+    allowAccidentals,
+    promptStyle,
+    focusWeakSpots,
+    minFret,
+    maxFret,
+    showHint,
+    inputDeviceId,
+  } = s;
   localStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify({ bass, notesPerSession, allowAccidentals, promptStyle, focusWeakSpots, minFret, maxFret, showHint, inputDeviceId })
+    JSON.stringify({
+      instrument,
+      tuning,
+      notesPerSession,
+      allowAccidentals,
+      promptStyle,
+      focusWeakSpots,
+      minFret,
+      maxFret,
+      showHint,
+      inputDeviceId,
+    })
   );
 }

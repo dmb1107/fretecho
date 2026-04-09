@@ -14,7 +14,7 @@ export default function App() {
         <div className="max-w-5xl mx-auto flex items-center justify-between px-6 py-3">
           <div className="flex items-baseline gap-2">
             <span className="text-brand text-2xl font-bold">FretEcho</span>
-            <span className="text-neutral-500 text-xs">Bass fretboard trainer</span>
+            <span className="text-neutral-500 text-xs">Fretboard trainer</span>
           </div>
           <nav className="flex gap-1">
             <TabButton current={tab} tab="train" onClick={() => setTab('train')}>

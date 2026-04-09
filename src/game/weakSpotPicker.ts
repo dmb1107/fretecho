@@ -1,13 +1,13 @@
 // Weighted random picker that favors weak or unseen fretboard positions.
 
-import type { BassType, Position } from '../music/tunings';
+import type { TuningId, Position } from '../music/tunings';
 import { allPositions, positionKey } from '../music/tunings';
 import { isSharpOrFlat } from '../music/notes';
 import { noteAt } from '../music/tunings';
 import { proficiency, type StatsMap } from '../stats/statsStore';
 
 export interface PickerOptions {
-  bass: BassType;
+  tuning: TuningId;
   minFret: number;
   maxFret: number;
   allowAccidentals: boolean;
@@ -17,10 +17,10 @@ export interface PickerOptions {
 
 /** Build the pool of eligible positions given current settings. */
 export function eligiblePositions(opts: PickerOptions): Position[] {
-  const { bass, minFret, maxFret, allowAccidentals } = opts;
-  const pool = allPositions(bass, minFret, maxFret);
+  const { tuning, minFret, maxFret, allowAccidentals } = opts;
+  const pool = allPositions(tuning, minFret, maxFret);
   if (allowAccidentals) return pool;
-  return pool.filter((p) => !isSharpOrFlat(noteAt(bass, p.stringIndex, p.fret)));
+  return pool.filter((p) => !isSharpOrFlat(noteAt(tuning, p.stringIndex, p.fret)));
 }
 
 /** Pick the next target. Focus mode biases toward weak / unseen positions. */
@@ -46,7 +46,7 @@ export function pickNext(opts: PickerOptions, avoid?: Position): Position {
 }
 
 function weightFor(pos: Position, opts: PickerOptions): number {
-  const key = positionKey(opts.bass, pos);
+  const key = positionKey(opts.tuning, pos);
   const stat = opts.stats[key];
   if (!opts.focusWeakSpots) return 1;
   if (!stat || stat.attempts < 3) return 3; // prioritize under-sampled positions

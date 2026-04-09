@@ -29,23 +29,30 @@ export function StatsScreen() {
   const reset = useStatsStore((s) => s.reset);
   const [hover, setHover] = useState<{ s: number; f: number } | null>(null);
 
-  const positions = allPositions(settings.bass, settings.minFret, settings.maxFret);
+  const positions = allPositions(settings.tuning, settings.minFret, settings.maxFret);
   const highlights = new Map<string, FretboardHighlight>();
   for (const p of positions) {
-    const stat = stats[keyFor(settings.bass, p.stringIndex, p.fret)];
+    const stat = stats[keyFor(settings.tuning, p.stringIndex, p.fret)];
     const score = proficiency(stat);
     highlights.set(`${p.stringIndex}:${p.fret}`, {
       color: colorForScore(score),
-      label: midiToNoteClass(noteAt(settings.bass, p.stringIndex, p.fret)),
+      label: midiToNoteClass(noteAt(settings.tuning, p.stringIndex, p.fret)),
       textColor: textColorForScore(score),
     });
   }
 
-  const hoverStat = hover ? stats[keyFor(settings.bass, hover.s, hover.f)] : undefined;
+  const hoverStat = hover ? stats[keyFor(settings.tuning, hover.s, hover.f)] : undefined;
   const hoverScore = hover ? proficiency(hoverStat) : null;
 
-  const totalAttempts = Object.values(stats).reduce((a, b) => a + b.attempts, 0);
-  const totalCorrect = Object.values(stats).reduce((a, b) => a + b.correct, 0);
+  // Totals are scoped to the current instrument (bass stats are shared across
+  // 4-string / 5-string; guitar is its own namespace).
+  const instrumentPrefix = `${settings.instrument}:`;
+  const totalAttempts = Object.entries(stats)
+    .filter(([k]) => k.startsWith(instrumentPrefix))
+    .reduce((a, [, b]) => a + b.attempts, 0);
+  const totalCorrect = Object.entries(stats)
+    .filter(([k]) => k.startsWith(instrumentPrefix))
+    .reduce((a, [, b]) => a + b.correct, 0);
 
   return (
     <div className="flex flex-col gap-6 p-6 max-w-5xl mx-auto">
@@ -72,7 +79,7 @@ export function StatsScreen() {
 
       <div className="flex justify-center">
         <Fretboard
-          bass={settings.bass}
+          tuning={settings.tuning}
           minFret={settings.minFret}
           maxFret={settings.maxFret}
           highlights={highlights}
@@ -84,7 +91,7 @@ export function StatsScreen() {
         {hover && hoverStat ? (
           <div className="text-sm text-neutral-300">
             <div className="font-semibold">
-              String {hover.s + 1}, Fret {hover.f} — {midiToNoteClass(noteAt(settings.bass, hover.s, hover.f))}
+              String {hover.s + 1}, Fret {hover.f} — {midiToNoteClass(noteAt(settings.tuning, hover.s, hover.f))}
             </div>
             <div>
               {hoverStat.correct} / {hoverStat.attempts} correct ({Math.round((hoverStat.correct / hoverStat.attempts) * 100)}%),
@@ -94,7 +101,7 @@ export function StatsScreen() {
           </div>
         ) : hover ? (
           <div className="text-sm text-neutral-500">
-            String {hover.s + 1}, Fret {hover.f} — {midiToNoteClass(noteAt(settings.bass, hover.s, hover.f))} — no attempts yet
+            String {hover.s + 1}, Fret {hover.f} — {midiToNoteClass(noteAt(settings.tuning, hover.s, hover.f))} — no attempts yet
           </div>
         ) : (
           <div className="text-sm text-neutral-500">Click a position to see its stats.</div>

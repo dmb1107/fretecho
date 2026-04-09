@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSettings } from '../settings/settingsStore';
 import { listInputDevices } from '../audio/micInput';
+import { tuningsFor } from '../music/tunings';
 
 export function SettingsScreen() {
   const s = useSettings();
@@ -24,15 +25,22 @@ export function SettingsScreen() {
     <div className="flex flex-col gap-8 p-6 max-w-2xl mx-auto">
       <h2 className="text-2xl font-bold">Settings</h2>
 
-      <Section title="Bass">
+      <Section title="Instrument">
         <Radio
-          value={s.bass}
-          onChange={(v) => s.set('bass', v)}
+          value={s.instrument}
+          onChange={(v) => s.setInstrument(v)}
           options={[
-            { value: '4-string', label: '4-string (E A D G)' },
-            { value: '5-string', label: '5-string (B E A D G)' },
+            { value: 'bass', label: 'Bass' },
+            { value: 'guitar', label: 'Guitar' },
           ]}
         />
+        <div className="mt-2 border-t border-neutral-800 pt-3">
+          <Radio
+            value={s.tuning}
+            onChange={(v) => s.set('tuning', v)}
+            options={tuningsFor(s.instrument).map((t) => ({ value: t.id, label: t.label }))}
+          />
+        </div>
       </Section>
 
       <Section title="Session">

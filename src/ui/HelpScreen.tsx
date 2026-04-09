@@ -6,13 +6,13 @@ export function HelpScreen() {
       <header className="flex flex-col gap-2">
         <h2 className="text-3xl font-bold text-brand">How to use FretEcho</h2>
         <p className="text-neutral-400">
-          FretEcho calls out a note; you play it on your bass.
+          FretEcho calls out a note; you play it on your instrument.
         </p>
       </header>
 
       <Section title="Getting started">
         <Ol>
-          <li>In <Kbd>Settings</Kbd>, choose your bass and mic input.</li>
+          <li>In <Kbd>Settings</Kbd>, choose your instrument and mic input.</li>
           <li>In <Kbd>Train</Kbd>, hit <Kbd>Start session</Kbd> and play each note you hear.</li>
           <li>Right = green, wrong = red and the fret is shown. Keep trying until you get it.</li>
         </Ol>

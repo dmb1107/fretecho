@@ -17,7 +17,7 @@ export default defineConfig({
       manifest: {
         name: 'FretEcho',
         short_name: 'FretEcho',
-        description: 'Call-and-response bass fretboard trainer.',
+        description: 'Call-and-response fretboard trainer for bass and guitar.',
         theme_color: '#ff6b35',
         background_color: '#0b0b0b',
         display: 'standalone',
