@@ -27,12 +27,12 @@ const DEFAULTS: Settings = {
   instrument: 'bass',
   tuning: '4-string',
   notesPerSession: 20,
-  allowAccidentals: false,
-  promptStyle: 'note-and-string',
+  allowAccidentals: true,
+  promptStyle: 'noteclass-and-string',
   focusWeakSpots: false,
   minFret: 0,
   maxFret: DEFAULT_MAX_FRET.bass,
-  showHint: true,
+  showHint: false,
   inputDeviceId: null,
 };
 

@@ -39,7 +39,7 @@ export function Fretboard(props: FretboardProps) {
   const cellW = 56;
   const openW = 48; // width of the open-string area to the left of the nut
   const cellH = 42;
-  const padX = 36;
+  const padX = 52; // wide enough for "low E" / "high E" labels
   const padY = 24;
   const openOffset = showOpen ? openW : 0;
   const bodyStartX = padX + openOffset;

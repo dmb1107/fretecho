@@ -198,7 +198,7 @@ export function TrainingScreen() {
       )}
 
       {engineState.kind === 'done' ? (
-        <SessionSummary results={engineState.results} tuning={cfg.tuning} onAgain={startSession} />
+        <SessionSummary results={engineState.results} tuning={cfg.tuning} onDone={() => setEngineState({ kind: 'idle' })} />
       ) : (
         <>
           <div className="flex flex-col items-center gap-2">
@@ -375,11 +375,11 @@ function progressFor(state: EngineState, total: number, correct: number) {
 function SessionSummary({
   results,
   tuning,
-  onAgain,
+  onDone,
 }: {
   results: RoundResult[];
   tuning: import('../music/tunings').TuningId;
-  onAgain: () => void;
+  onDone: () => void;
 }) {
   const total = results.length;
   const correct = results.filter((r) => r.correct).length;
@@ -407,10 +407,10 @@ function SessionSummary({
         </div>
       )}
       <button
-        onClick={onAgain}
+        onClick={onDone}
         className="px-5 py-2 rounded bg-brand hover:bg-brand-dim font-semibold text-black"
       >
-        Start another
+        Done
       </button>
     </div>
   );
