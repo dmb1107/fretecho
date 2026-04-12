@@ -356,8 +356,8 @@ function EarPromptDisplay({
     largeText = interval?.shortLabel ?? '—';
     subtitleText = `${interval?.label} ${dirArrow} from ${rootName}`;
   } else {
-    // prompting phase
-    largeText = interval?.shortLabel ?? '—';
+    // prompting phase — show '?' during auto-replay, interval label otherwise
+    largeText = (state.kind === 'prompting' && state.isAutoReplay) ? '?' : (interval?.shortLabel ?? '—');
     subtitleText = interval ? `${interval.label} ${dirArrow}` : null;
   }
 
@@ -370,6 +370,12 @@ function EarPromptDisplay({
     const down = ((playedPc - targetPc) + 12) % 12;
     if (up !== 0) wrongArrow = up <= down ? '↑' : '↓';
   } else if (state.kind === 'listening-root' && state.lastWrongMidi !== undefined) {
+    const targetPc = ((state.rootMidi % 12) + 12) % 12;
+    const playedPc = ((state.lastWrongMidi % 12) + 12) % 12;
+    const up = ((targetPc - playedPc) + 12) % 12;
+    const down = ((playedPc - targetPc) + 12) % 12;
+    if (up !== 0) wrongArrow = up <= down ? '↑' : '↓';
+  } else if (state.kind === 'prompting' && state.isAutoReplay && state.lastWrongMidi !== undefined) {
     const targetPc = ((state.rootMidi % 12) + 12) % 12;
     const playedPc = ((state.lastWrongMidi % 12) + 12) % 12;
     const up = ((targetPc - playedPc) + 12) % 12;

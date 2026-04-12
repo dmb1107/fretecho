@@ -34,6 +34,8 @@ export type EarEngineState =
       interval: IntervalDef;
       rootMidi: number;
       direction: 'ascending' | 'descending';
+      isAutoReplay?: boolean;
+      lastWrongMidi?: number;
     }
   | {
       kind: 'listening-root';
@@ -301,12 +303,30 @@ export class EarSessionEngine {
     });
 
     this.deps.pitchLoop.pause();
-    setTimeout(() => {
-      if (this.stopped) return;
-      if (this.state.kind !== 'listening-root') return;
-      this.deps.pitchLoop.resume();
-      this.deps.pitchLoop.armForNextNote();
-    }, 400);
+    if (!samePcAsLastWrong) {
+      // Switch to prompting so handleStableNote ignores detections during replay.
+      const restoreState = this.state;
+      this.setState({ kind: 'prompting', round: this.round, interval, rootMidi, direction, isAutoReplay: true, lastWrongMidi: playedMidi });
+      // Replay the reference tone after the error blip finishes (~500ms),
+      // then restore listening state after tone + buffer flush.
+      setTimeout(() => {
+        if (this.stopped) return;
+        replayReference();
+      }, 500);
+      setTimeout(() => {
+        if (this.stopped) return;
+        this.deps.pitchLoop.resume();
+        this.deps.pitchLoop.armForNextNote();
+        this.setState(restoreState);
+      }, 500 + 800 + 400);
+    } else {
+      setTimeout(() => {
+        if (this.stopped) return;
+        if (this.state.kind !== 'listening-root') return;
+        this.deps.pitchLoop.resume();
+        this.deps.pitchLoop.armForNextNote();
+      }, 400);
+    }
   }
 
   private judgeInterval(playedMidi: number) {

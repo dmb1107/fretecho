@@ -38,9 +38,9 @@ export function playTone(midi: number, durationMs = 800): void {
   // Gain envelope: pluck-like attack → decay → sustain → release.
   const gain = c.createGain();
   gain.gain.setValueAtTime(0, t0);
-  gain.gain.linearRampToValueAtTime(0.55, t0 + 0.005);          // 5ms attack
-  gain.gain.linearRampToValueAtTime(0.40, t0 + 0.055);          // 50ms decay to ~70%
-  gain.gain.setValueAtTime(0.40, t0 + dur - 0.15);              // hold sustain
+  gain.gain.linearRampToValueAtTime(0.9, t0 + 0.005);           // 5ms attack
+  gain.gain.linearRampToValueAtTime(0.7, t0 + 0.055);           // 50ms decay to ~78%
+  gain.gain.setValueAtTime(0.7, t0 + dur - 0.15);               // hold sustain
   gain.gain.exponentialRampToValueAtTime(0.001, t0 + dur);       // 150ms release
 
   osc.connect(filter).connect(gain).connect(c.destination);
