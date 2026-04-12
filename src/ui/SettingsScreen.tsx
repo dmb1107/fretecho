@@ -91,17 +91,33 @@ export function SettingsScreen() {
         <div className="flex flex-col gap-2">
           <span className="text-neutral-300">Intervals</span>
           {INTERVALS.map((iv) => {
+            const isRoot = iv.id === 'R';
             const enabled = s.enabledIntervals.includes(iv.id);
+            const rootSelected = s.enabledIntervals.includes('R');
+            const isDisabled = !isRoot && rootSelected;
             return (
-              <label key={iv.id} className="flex items-center gap-2 cursor-pointer">
+              <label key={iv.id} className={`flex items-center gap-2 ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                 <input
                   type="checkbox"
                   checked={enabled}
+                  disabled={isDisabled}
                   onChange={() => {
-                    const next = enabled
-                      ? s.enabledIntervals.filter((t) => t !== iv.id)
-                      : [...s.enabledIntervals, iv.id];
-                    if (next.length > 0) s.set('enabledIntervals', next);
+                    if (isRoot) {
+                      if (!enabled) {
+                        // Enabling root: clear all other intervals
+                        s.set('enabledIntervals', ['R']);
+                      } else {
+                        // Disabling root: only allow if it won't leave the list empty
+                        const next = s.enabledIntervals.filter((t) => t !== 'R');
+                        if (next.length > 0) s.set('enabledIntervals', next);
+                      }
+                    } else {
+                      // Non-root: toggle normally, removing Root if it was selected
+                      const next = enabled
+                        ? s.enabledIntervals.filter((t) => t !== iv.id)
+                        : [...s.enabledIntervals.filter((t) => t !== 'R'), iv.id];
+                      if (next.length > 0) s.set('enabledIntervals', next);
+                    }
                   }}
                 />
                 <span className="text-neutral-200">{iv.shortLabel} — {iv.label}</span>
