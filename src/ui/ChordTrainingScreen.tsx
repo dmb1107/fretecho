@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings, type TrainingMode } from '../settings/settingsStore';
 import { useStatsStore } from '../stats/statsStore';
-import { openMic, type MicStream } from '../audio/micInput';
-import { PitchLoop } from '../audio/pitchDetector';
 import { cancelSpeech } from '../audio/speech';
+import { useMicStore, setOnStableNote } from '../audio/micStore';
 import {
   ChordSessionEngine,
   type ChordEngineState,
@@ -23,24 +22,22 @@ export function ChordTrainingScreen() {
   const settings = useSettings();
   const record = useStatsStore((s) => s.record);
   const getStats = () => useStatsStore.getState().stats;
+  const micStore = useMicStore();
+  const detected = useMicStore((s) => s.detected);
+  const micOpen = useMicStore((s) => s.open);
 
   const [engineState, setEngineState] = useState<ChordEngineState>({ kind: 'idle' });
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<FlashKind>(null);
   const [running, setRunning] = useState(false);
-  const [detected, setDetected] = useState<{ midi: number; frequency: number; cents: number } | null>(null);
-  const [micOpen, setMicOpen] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
   const lastCountedRoundRef = useRef<number>(0);
 
-  const micRef = useRef<MicStream | null>(null);
-  const loopRef = useRef<PitchLoop | null>(null);
   const engineRef = useRef<ChordSessionEngine | null>(null);
 
   const cfg: ChordSessionConfig = useMemo(
     () => ({
       tuning: settings.tuning,
-      chordsPerSession: settings.chordsPerSession,
       enabledChordTypes: settings.enabledChordTypes,
       allowAccidentals: settings.allowAccidentals,
       minFret: settings.minFret,
@@ -51,85 +48,55 @@ export function ChordTrainingScreen() {
     [settings]
   );
 
-  const ensureMicOpen = async (): Promise<PitchLoop> => {
-    if (loopRef.current) return loopRef.current;
-    const mic = await openMic(settings.inputDeviceId ?? undefined);
-    micRef.current = mic;
-    const loop = new PitchLoop(mic, {
-      onStableNote: (e) => engineRef.current?.handleStableNote(e.midi),
-      onFrame: (f) =>
-        setDetected(f ? { midi: f.midi, frequency: f.frequency, cents: f.cents } : null),
-    });
-    loopRef.current = loop;
-    setMicOpen(true);
-    return loop;
-  };
-
-  const startMicTest = async () => {
-    setError(null);
-    try {
-      const loop = await ensureMicOpen();
-      loop.start();
-    } catch (e) {
-      setError((e as Error).message || 'Could not access microphone');
-      cleanup();
-    }
-  };
-
-  const stopMicTest = () => cleanup();
+  useEffect(() => {
+    setOnStableNote((e) => engineRef.current?.handleStableNote(e.midi));
+    return () => setOnStableNote(null);
+  }, []);
 
   const startSession = async () => {
     setError(null);
     setCorrectCount(0);
     lastCountedRoundRef.current = 0;
-    try {
-      const loop = await ensureMicOpen();
-      const engine = new ChordSessionEngine(cfg, {
-        pitchLoop: loop,
-        getStats,
-        recordStat: record,
-        onStateChange: (s) => {
-          setEngineState(s);
-          if (s.kind === 'tone-feedback') {
-            setFlash('success');
-          } else if (s.kind === 'feedback') {
-            setFlash(s.allCorrectFirstTry ? 'success' : 'error');
-            if (s.round !== lastCountedRoundRef.current) {
-              lastCountedRoundRef.current = s.round;
-              if (s.allCorrectFirstTry) setCorrectCount((c) => c + 1);
-            }
-          }
-        },
-      });
-      engineRef.current = engine;
-      setRunning(true);
-      await engine.start();
-    } catch (e) {
-      setError((e as Error).message || 'Could not access microphone');
-      cleanup();
+    const loop = micStore.loop;
+    if (!loop) {
+      setError('Microphone is not open');
+      return;
     }
+    const engine = new ChordSessionEngine(cfg, {
+      pitchLoop: loop,
+      getStats,
+      recordStat: record,
+      onStateChange: (s) => {
+        setEngineState(s);
+        if (s.kind === 'tone-feedback') {
+          setFlash('success');
+        } else if (s.kind === 'feedback') {
+          setFlash(s.allCorrectFirstTry ? 'success' : 'error');
+          if (s.round !== lastCountedRoundRef.current) {
+            lastCountedRoundRef.current = s.round;
+            if (s.allCorrectFirstTry) setCorrectCount((c) => c + 1);
+          }
+        }
+      },
+    });
+    engineRef.current = engine;
+    setRunning(true);
+    await engine.start();
   };
 
   const stopSession = () => {
+    cancelSpeech();
     engineRef.current?.stop();
-    cleanup();
+    engineRef.current = null;
     setRunning(false);
   };
 
-  const cleanup = () => {
-    cancelSpeech();
-    engineRef.current?.stop();
-    loopRef.current?.stop();
-    micRef.current?.stop();
-    loopRef.current = null;
-    micRef.current = null;
-    engineRef.current = null;
-    setMicOpen(false);
-    setDetected(null);
-  };
-
   useEffect(() => {
-    return () => cleanup();
+    return () => {
+      cancelSpeech();
+      engineRef.current?.stop();
+      engineRef.current = null;
+    };
   }, []);
 
   // Build fretboard highlights: show all positions matching the expected pitch class.
@@ -186,7 +153,7 @@ export function ChordTrainingScreen() {
       ? engineState.chord.useFlats
       : false;
 
-  const progress = chordProgressFor(engineState, cfg.chordsPerSession, correctCount);
+  const roundNum = 'round' in engineState ? engineState.round : 0;
 
   return (
     <div className="flex flex-col gap-3 p-3 sm:gap-6 sm:p-6 max-w-5xl mx-auto">
@@ -225,7 +192,7 @@ export function ChordTrainingScreen() {
                   settings.showHint ? 'bg-orange-400' : 'bg-neutral-600'
                 }`}
               />
-              {settings.showHint ? 'Fret hint: on' : 'Fret hint: off'}
+              {settings.showHint ? 'Hints: on' : 'Hints: off'}
             </button>
           </div>
 
@@ -242,38 +209,26 @@ export function ChordTrainingScreen() {
           <DetectedCard detected={detected} micOpen={micOpen} />
 
           <div className="flex flex-col gap-2 sm:gap-3">
-            <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-neutral-400">
-              <div className="flex-1">
-                <div className="h-2 rounded bg-neutral-800 overflow-hidden">
-                  <div
-                    className="h-full bg-brand transition-all"
-                    style={{ width: `${(progress.round / progress.total) * 100}%` }}
-                  />
-                </div>
+            {running && (
+              <div className="flex items-center gap-4 text-xs sm:text-sm text-neutral-400">
+                <div>Round {roundNum}</div>
+                <div>{correctCount} correct</div>
               </div>
-              <div>
-                {progress.round} / {progress.total}
-              </div>
-              <div>{progress.correct} correct</div>
-            </div>
+            )}
 
             <div className="flex items-center justify-between">
-              <MicMeter pitchLoop={loopRef.current} />
+              <MicMeter pitchLoop={micStore.loop} />
               <div className="flex gap-2">
-                {!running && !micOpen && (
+                {!running && (
                   <button
-                    onClick={startMicTest}
-                    className="px-4 py-2 rounded bg-neutral-800 hover:bg-neutral-700 text-sm"
+                    onClick={() => micStore.toggleMic(settings.inputDeviceId ?? undefined)}
+                    className={`px-4 py-2 rounded text-sm ${
+                      micOpen
+                        ? 'bg-neutral-800 hover:bg-neutral-700'
+                        : 'bg-red-900/60 hover:bg-red-900/80 text-red-300'
+                    }`}
                   >
-                    Test mic
-                  </button>
-                )}
-                {!running && micOpen && (
-                  <button
-                    onClick={stopMicTest}
-                    className="px-4 py-2 rounded bg-neutral-800 hover:bg-neutral-700 text-sm"
-                  >
-                    Stop test
+                    {micOpen ? 'Mic on' : 'Mic off'}
                   </button>
                 )}
                 {!running ? (
@@ -424,18 +379,6 @@ function DetectedCard({
   );
 }
 
-function chordProgressFor(state: ChordEngineState, total: number, correct: number) {
-  if (state.kind === 'idle') return { round: 0, total, correct: 0 };
-  if (state.kind === 'done') {
-    return {
-      round: state.results.length,
-      total,
-      correct: state.results.filter((r) => r.allCorrectFirstTry).length,
-    };
-  }
-  const round = 'round' in state ? state.round : 0;
-  return { round, total, correct };
-}
 
 function ChordSessionSummary({
   results,
@@ -495,6 +438,7 @@ function ModeToggle() {
   const modes: { value: TrainingMode; label: string }[] = [
     { value: 'notes', label: 'Notes' },
     { value: 'chords', label: 'Chord Tones' },
+    { value: 'ear', label: 'Ear Training' },
   ];
   return (
     <div className="flex justify-center">

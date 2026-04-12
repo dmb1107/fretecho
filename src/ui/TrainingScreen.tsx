@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings, type TrainingMode } from '../settings/settingsStore';
 import { useStatsStore } from '../stats/statsStore';
-import { openMic, type MicStream } from '../audio/micInput';
-import { PitchLoop } from '../audio/pitchDetector';
 import { cancelSpeech } from '../audio/speech';
+import { useMicStore, setOnStableNote } from '../audio/micStore';
 import {
   SessionEngine,
   type EngineState,
@@ -18,12 +17,24 @@ import { MicMeter } from './MicMeter';
 import { FeedbackFlash, type FlashKind } from './FeedbackFlash';
 import { midiToNoteClass, midiToNoteName } from '../music/notes';
 import { ChordTrainingScreen } from './ChordTrainingScreen';
+import { EarTrainingScreen } from './EarTrainingScreen';
 
 export function TrainingScreen() {
   const settings = useSettings();
+  const micStore = useMicStore();
+
+  // Auto-open mic once at the top level (survives mode switches).
+  useEffect(() => {
+    if (!micStore.open) {
+      micStore.openMic(settings.inputDeviceId ?? undefined).catch(() => {});
+    }
+  }, []);
 
   if (settings.trainingMode === 'chords') {
     return <ChordTrainingScreen />;
+  }
+  if (settings.trainingMode === 'ear') {
+    return <EarTrainingScreen />;
   }
 
   return <NoteTrainingScreen />;
@@ -33,24 +44,22 @@ function NoteTrainingScreen() {
   const settings = useSettings();
   const record = useStatsStore((s) => s.record);
   const getStats = () => useStatsStore.getState().stats;
+  const micStore = useMicStore();
+  const detected = useMicStore((s) => s.detected);
+  const micOpen = useMicStore((s) => s.open);
 
   const [engineState, setEngineState] = useState<EngineState>({ kind: 'idle' });
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<FlashKind>(null);
   const [running, setRunning] = useState(false);
-  const [detected, setDetected] = useState<{ midi: number; frequency: number; cents: number } | null>(null);
-  const [micOpen, setMicOpen] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
   const lastCountedRoundRef = useRef<number>(0);
 
-  const micRef = useRef<MicStream | null>(null);
-  const loopRef = useRef<PitchLoop | null>(null);
   const engineRef = useRef<SessionEngine | null>(null);
 
   const cfg: SessionConfig = useMemo(
     () => ({
       tuning: settings.tuning,
-      notesPerSession: settings.notesPerSession,
       allowAccidentals: settings.allowAccidentals,
       promptStyle: settings.promptStyle,
       focusWeakSpots: settings.focusWeakSpots,
@@ -60,91 +69,47 @@ function NoteTrainingScreen() {
     [settings]
   );
 
-  /** Open mic + pitch loop and wire the detected-note display. */
-  const ensureMicOpen = async (): Promise<PitchLoop> => {
-    if (loopRef.current) return loopRef.current;
-    const mic = await openMic(settings.inputDeviceId ?? undefined);
-    micRef.current = mic;
-    const loop = new PitchLoop(mic, {
-      onStableNote: (e) => engineRef.current?.handleStableNote(e.midi),
-      onFrame: (f) =>
-        setDetected(f ? { midi: f.midi, frequency: f.frequency, cents: f.cents } : null),
-    });
-    loopRef.current = loop;
-    setMicOpen(true);
-    return loop;
-  };
-
-  const startMicTest = async () => {
-    setError(null);
-    try {
-      const loop = await ensureMicOpen();
-      loop.start();
-    } catch (e) {
-      setError((e as Error).message || 'Could not access microphone');
-      cleanup();
-    }
-  };
-
-  const stopMicTest = () => {
-    cleanup();
-  };
+  // Wire up onStableNote to route to the engine.
+  useEffect(() => {
+    setOnStableNote((e) => engineRef.current?.handleStableNote(e.midi));
+    return () => setOnStableNote(null);
+  }, []);
 
   const startSession = async () => {
     setError(null);
     setCorrectCount(0);
     lastCountedRoundRef.current = 0;
-    try {
-      const loop = await ensureMicOpen();
-      const engine = new SessionEngine(cfg, {
-        pitchLoop: loop,
-        getStats,
-        recordStat: record,
-        onStateChange: (s) => {
-          setEngineState(s);
-          if (s.kind === 'feedback') {
-            setFlash(s.result.correct ? 'success' : 'error');
-            // Count each round at most once on its first feedback transition.
-            if (s.round !== lastCountedRoundRef.current) {
-              lastCountedRoundRef.current = s.round;
-              if (s.result.correct) setCorrectCount((c) => c + 1);
-            }
-          }
-        },
-      });
-      engineRef.current = engine;
-      setRunning(true);
-      await engine.start();
-    } catch (e) {
-      setError((e as Error).message || 'Could not access microphone');
-      cleanup();
+    const loop = micStore.loop;
+    if (!loop) {
+      setError('Microphone is not open');
+      return;
     }
+    const engine = new SessionEngine(cfg, {
+      pitchLoop: loop,
+      getStats,
+      recordStat: record,
+      onStateChange: (s) => {
+        setEngineState(s);
+        if (s.kind === 'feedback') {
+          setFlash(s.result.correct ? 'success' : 'error');
+          if (s.round !== lastCountedRoundRef.current) {
+            lastCountedRoundRef.current = s.round;
+            if (s.result.correct) setCorrectCount((c) => c + 1);
+          }
+        }
+      },
+    });
+    engineRef.current = engine;
+    setRunning(true);
+    await engine.start();
   };
 
   const stopSession = () => {
-    engineRef.current?.stop();
-    cleanup();
-    setRunning(false);
-  };
-
-  const cleanup = () => {
-    // Abort any in-flight speech so a speak() promise in the engine's
-    // nextRound() doesn't get stranded (would otherwise keep Chrome's
-    // global SpeechSynthesis "stuck" and break all future sessions).
     cancelSpeech();
     engineRef.current?.stop();
-    loopRef.current?.stop();
-    micRef.current?.stop();
-    loopRef.current = null;
-    micRef.current = null;
     engineRef.current = null;
-    setMicOpen(false);
-    setDetected(null);
+    setRunning(false);
   };
-
-  useEffect(() => {
-    return () => cleanup();
-  }, []);
 
   // String to highlight on the fretboard: always reveal the target string
   // regardless of the hint setting. In "note-only" mode the player can play
@@ -183,7 +148,7 @@ function NoteTrainingScreen() {
     return m;
   }, [engineState, settings.showHint]);
 
-  const progress = progressFor(engineState, cfg.notesPerSession, correctCount);
+  const roundNum = 'round' in engineState ? engineState.round : 0;
   const currentText =
     engineState.kind === 'prompting' || engineState.kind === 'listening'
       ? engineState.text
@@ -263,7 +228,7 @@ function NoteTrainingScreen() {
                   settings.showHint ? 'bg-orange-400' : 'bg-neutral-600'
                 }`}
               />
-              {settings.showHint ? 'Fret hint: on' : 'Fret hint: off'}
+              {settings.showHint ? 'Hints: on' : 'Hints: off'}
             </button>
           </div>
 
@@ -287,38 +252,26 @@ function NoteTrainingScreen() {
           <DetectedCard detected={detected} micOpen={micOpen} />
 
           <div className="flex flex-col gap-2 sm:gap-3">
-            <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-neutral-400">
-              <div className="flex-1">
-                <div className="h-2 rounded bg-neutral-800 overflow-hidden">
-                  <div
-                    className="h-full bg-brand transition-all"
-                    style={{ width: `${(progress.round / progress.total) * 100}%` }}
-                  />
-                </div>
+            {running && (
+              <div className="flex items-center gap-4 text-xs sm:text-sm text-neutral-400">
+                <div>Round {roundNum}</div>
+                <div>{correctCount} correct</div>
               </div>
-              <div>
-                {progress.round} / {progress.total}
-              </div>
-              <div>{progress.correct} correct</div>
-            </div>
+            )}
 
             <div className="flex items-center justify-between">
-              <MicMeter pitchLoop={loopRef.current} />
+              <MicMeter pitchLoop={micStore.loop} />
               <div className="flex gap-2">
-                {!running && !micOpen && (
+                {!running && (
                   <button
-                    onClick={startMicTest}
-                    className="px-4 py-2 rounded bg-neutral-800 hover:bg-neutral-700 text-sm"
+                    onClick={() => micStore.toggleMic(settings.inputDeviceId ?? undefined)}
+                    className={`px-4 py-2 rounded text-sm ${
+                      micOpen
+                        ? 'bg-neutral-800 hover:bg-neutral-700'
+                        : 'bg-red-900/60 hover:bg-red-900/80 text-red-300'
+                    }`}
                   >
-                    Test mic
-                  </button>
-                )}
-                {!running && micOpen && (
-                  <button
-                    onClick={stopMicTest}
-                    className="px-4 py-2 rounded bg-neutral-800 hover:bg-neutral-700 text-sm"
-                  >
-                    Stop test
+                    {micOpen ? 'Mic on' : 'Mic off'}
                   </button>
                 )}
                 {!running ? (
@@ -372,18 +325,6 @@ function DetectedCard({
   );
 }
 
-function progressFor(state: EngineState, total: number, correct: number) {
-  if (state.kind === 'idle') return { round: 0, total, correct: 0 };
-  if (state.kind === 'done') {
-    return {
-      round: state.results.length,
-      total,
-      correct: state.results.filter((r) => r.correct).length,
-    };
-  }
-  const round = 'round' in state ? state.round : 0;
-  return { round, total, correct };
-}
 
 function SessionSummary({
   results,
@@ -443,6 +384,7 @@ function ModeToggle() {
   const modes: { value: TrainingMode; label: string }[] = [
     { value: 'notes', label: 'Notes' },
     { value: 'chords', label: 'Chord Tones' },
+    { value: 'ear', label: 'Ear Training' },
   ];
   return (
     <div className="flex justify-center">

@@ -6,6 +6,7 @@ import { proficiency, useStatsStore, keyFor } from '../stats/statsStore';
 import { Fretboard, type FretboardHighlight } from './Fretboard';
 import { allPositions, noteAt } from '../music/tunings';
 import { midiToNoteClass } from '../music/notes';
+import { INTERVALS } from '../music/intervals';
 
 // Red -> Yellow -> Green gradient.
 function colorForScore(score: number | null): string {
@@ -117,7 +118,81 @@ export function StatsScreen() {
         <span>High</span>
         <span className="ml-4">Gray = unseen</span>
       </div>
+
+      <EarTrainingStats stats={stats} />
     </div>
+  );
+}
+
+function EarTrainingStats({ stats }: { stats: Record<string, { attempts: number; correct: number; totalMs: number }> }) {
+  const directions = ['ascending', 'descending'] as const;
+  const earStats: { interval: typeof INTERVALS[number]; direction: string; dirLabel: string; stat: { attempts: number; correct: number; totalMs: number } }[] = [];
+
+  for (const iv of INTERVALS) {
+    if (iv.semitones === 0) {
+      // Root has no direction — check both old key format and current.
+      const stat = stats[`ear:interval:${iv.id}`];
+      if (stat) earStats.push({ interval: iv, direction: '', dirLabel: '', stat });
+    } else {
+      for (const dir of directions) {
+        const stat = stats[`ear:interval:${iv.id}:${dir}`];
+        if (stat) earStats.push({ interval: iv, direction: dir, dirLabel: dir === 'ascending' ? '↑' : '↓', stat });
+      }
+      // Also check old format (no direction) for backwards compatibility.
+      const oldStat = stats[`ear:interval:${iv.id}`];
+      if (oldStat) earStats.push({ interval: iv, direction: '', dirLabel: '', stat: oldStat });
+    }
+  }
+
+  if (earStats.length === 0) return null;
+
+  const totalAttempts = earStats.reduce((a, e) => a + e.stat.attempts, 0);
+  const totalCorrect = earStats.reduce((a, e) => a + e.stat.correct, 0);
+
+  return (
+    <>
+      <div className="mt-4 sm:mt-8 flex items-end justify-between">
+        <h2 className="text-lg sm:text-2xl font-bold">Ear training</h2>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-6 text-sm">
+        <Card label="Attempts" value={String(totalAttempts)} />
+        <Card label="Correct" value={String(totalCorrect)} />
+        <Card
+          label="Overall accuracy"
+          value={`${totalAttempts === 0 ? 0 : Math.round((totalCorrect / totalAttempts) * 100)}%`}
+        />
+      </div>
+
+      <div className="rounded border border-neutral-800 bg-neutral-900/40 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-xs uppercase tracking-widest text-neutral-500 border-b border-neutral-800">
+              <th className="text-left px-3 py-2">Interval</th>
+              <th className="text-center px-3 py-2">Dir</th>
+              <th className="text-right px-3 py-2">Attempts</th>
+              <th className="text-right px-3 py-2">Accuracy</th>
+              <th className="text-right px-3 py-2">Avg time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {earStats.map(({ interval, direction, dirLabel, stat }) => {
+              const acc = Math.round((stat.correct / stat.attempts) * 100);
+              const avg = (stat.totalMs / stat.attempts / 1000).toFixed(2);
+              return (
+                <tr key={`${interval.id}:${direction}`} className="border-b border-neutral-800/50 last:border-0">
+                  <td className="px-3 py-2 text-neutral-200">{interval.shortLabel} — {interval.label}</td>
+                  <td className="text-center px-3 py-2 text-neutral-400">{dirLabel || '—'}</td>
+                  <td className="text-right px-3 py-2 text-neutral-400">{stat.attempts}</td>
+                  <td className="text-right px-3 py-2 text-neutral-400">{acc}%</td>
+                  <td className="text-right px-3 py-2 text-neutral-400">{avg}s</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 

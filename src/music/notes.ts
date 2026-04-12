@@ -58,3 +58,49 @@ export function isSharpOrFlat(midi: number): boolean {
   const pc = ((midi % 12) + 12) % 12;
   return [1, 3, 6, 8, 10].includes(pc);
 }
+
+// ---------------------------------------------------------------------------
+// TTS-friendly note name helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a note-class string like "C#", "Bb", or "A" into something the
+ * Web Speech API pronounces correctly.
+ *
+ *   "A"  → "A."       (period prevents TTS reading it as the article "uh")
+ *   "C#" → "C sharp"
+ *   "Bb" → "B flat"
+ */
+export function speakableNoteName(noteClass: string): string {
+  const letter = noteClass.charAt(0);
+  const accidental = noteClass.slice(1);
+  const spokenLetter = letter === 'A' ? 'A.' : letter;
+  if (accidental === '#') return `${spokenLetter} sharp`;
+  if (accidental === 'b') return `${spokenLetter} flat`;
+  return spokenLetter;
+}
+
+/**
+ * Convert a full note name with octave like "F#2" into TTS-friendly text.
+ *
+ *   "B1"  → "B one"
+ *   "F#2" → "F sharp two"
+ *   "Bb0" → "B flat zero"
+ */
+export function speakableNoteWithOctave(nameWithOctave: string): string {
+  const m = /^([A-G])([#b]?)(-?\d+)$/.exec(nameWithOctave);
+  if (!m) return nameWithOctave;
+  const classStr = `${m[1]}${m[2]}`;
+  const octave = parseInt(m[3], 10);
+  return `${speakableNoteName(classStr)} ${octaveWord(octave)}`;
+}
+
+const OCTAVE_WORDS: Record<number, string> = {
+  [-1]: 'minus one',
+  0: 'zero', 1: 'one', 2: 'two', 3: 'three',
+  4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight',
+};
+
+function octaveWord(n: number): string {
+  return OCTAVE_WORDS[n] ?? String(n);
+}

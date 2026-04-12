@@ -5,6 +5,7 @@ import { useSettings } from '../settings/settingsStore';
 import { listInputDevices } from '../audio/micInput';
 import { tuningsFor } from '../music/tunings';
 import { CHORD_TYPES, CHORD_TYPE_IDS } from '../music/chords';
+import { INTERVALS } from '../music/intervals';
 
 export function SettingsScreen() {
   const s = useSettings();
@@ -45,53 +46,11 @@ export function SettingsScreen() {
       </Section>
 
       <Section title="Session">
-        <Field label="Notes per session">
-          <input
-            type="number"
-            min={1}
-            max={200}
-            value={s.notesPerSession}
-            onChange={(e) => s.set('notesPerSession', Math.max(1, parseInt(e.target.value) || 1))}
-            className="w-24 bg-neutral-900 border border-neutral-700 rounded px-2 py-1"
-          />
-        </Field>
-        <Field label="Fret range">
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={0}
-              max={24}
-              value={s.minFret}
-              onChange={(e) => s.set('minFret', clamp(parseInt(e.target.value) || 0, 0, s.maxFret))}
-              className="w-16 bg-neutral-900 border border-neutral-700 rounded px-2 py-1"
-            />
-            <span>to</span>
-            <input
-              type="number"
-              min={0}
-              max={24}
-              value={s.maxFret}
-              onChange={(e) => s.set('maxFret', clamp(parseInt(e.target.value) || 0, s.minFret, 24))}
-              className="w-16 bg-neutral-900 border border-neutral-700 rounded px-2 py-1"
-            />
-          </div>
-        </Field>
         <Toggle label="Allow sharps/flats" value={s.allowAccidentals} onChange={(v) => s.set('allowAccidentals', v)} />
         <Toggle label="Focus on weak spots" value={s.focusWeakSpots} onChange={(v) => s.set('focusWeakSpots', v)} />
-        <Toggle label="Show hint on fretboard" value={s.showHint} onChange={(v) => s.set('showHint', v)} />
       </Section>
 
       <Section title="Chord training">
-        <Field label="Chords per session">
-          <input
-            type="number"
-            min={1}
-            max={200}
-            value={s.chordsPerSession}
-            onChange={(e) => s.set('chordsPerSession', Math.max(1, parseInt(e.target.value) || 1))}
-            className="w-24 bg-neutral-900 border border-neutral-700 rounded px-2 py-1"
-          />
-        </Field>
         <div className="flex flex-col gap-2">
           <span className="text-neutral-300">Chord types</span>
           {CHORD_TYPE_IDS.map((id) => {
@@ -117,16 +76,39 @@ export function SettingsScreen() {
         </div>
       </Section>
 
-      <Section title="Prompt">
-        <Radio
-          value={s.promptStyle}
-          onChange={(v) => s.set('promptStyle', v)}
-          options={[
-            { value: 'note-and-string', label: 'Note + octave + string ("C1 on the A string")' },
-            { value: 'noteclass-and-string', label: 'Note + string ("C on the A string")' },
-            { value: 'note-only', label: 'Note + octave only ("C1")' },
-          ]}
-        />
+      <Section title="Ear training">
+        <Field label="Direction">
+          <select
+            value={s.earIntervalDirection}
+            onChange={(e) => s.set('earIntervalDirection', e.target.value as 'ascending' | 'descending' | 'random')}
+            className="bg-neutral-900 border border-neutral-700 rounded px-2 py-1"
+          >
+            <option value="ascending">Ascending</option>
+            <option value="descending">Descending</option>
+            <option value="random">Random</option>
+          </select>
+        </Field>
+        <div className="flex flex-col gap-2">
+          <span className="text-neutral-300">Intervals</span>
+          {INTERVALS.map((iv) => {
+            const enabled = s.enabledIntervals.includes(iv.id);
+            return (
+              <label key={iv.id} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={enabled}
+                  onChange={() => {
+                    const next = enabled
+                      ? s.enabledIntervals.filter((t) => t !== iv.id)
+                      : [...s.enabledIntervals, iv.id];
+                    if (next.length > 0) s.set('enabledIntervals', next);
+                  }}
+                />
+                <span className="text-neutral-200">{iv.shortLabel} — {iv.label}</span>
+              </label>
+            );
+          })}
+        </div>
       </Section>
 
       <Section title="Microphone">
@@ -217,6 +199,3 @@ function Radio<T extends string>({
   );
 }
 
-function clamp(n: number, lo: number, hi: number) {
-  return Math.max(lo, Math.min(hi, n));
-}

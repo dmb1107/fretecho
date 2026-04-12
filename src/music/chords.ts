@@ -1,6 +1,6 @@
 // Chord type definitions and helpers for the chord tone trainer.
 
-import { NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, isSharpOrFlat } from './notes';
+import { NOTE_NAMES_SHARP, NOTE_NAMES_FLAT, isSharpOrFlat, speakableNoteName } from './notes';
 
 export interface ChordType {
   id: string;
@@ -76,7 +76,7 @@ export const CHORD_TYPES: Record<string, ChordType> = {
 export const CHORD_TYPE_IDS = Object.keys(CHORD_TYPES);
 
 /** Default set of enabled chord types for new users. */
-export const DEFAULT_ENABLED_CHORDS = ['maj', 'min', 'maj7', 'min7', 'dom7'];
+export const DEFAULT_ENABLED_CHORDS = ['maj', 'min', 'maj7', 'min7', 'dom7', 'm7b5'];
 
 export interface ChordPrompt {
   /** Root pitch class 0-11 (C=0). */
@@ -102,18 +102,7 @@ export function chordDisplayName(rootName: string, chord: ChordType): string {
 
 /** TTS-friendly chord name, e.g. "C major seven", "B flat minor". */
 export function speakableChordName(rootName: string, chord: ChordType): string {
-  const spokenRoot = speakableRootName(rootName);
-  return `${spokenRoot} ${chord.spokenLabel}`;
-}
-
-function speakableRootName(name: string): string {
-  const letter = name.charAt(0);
-  const accidental = name.slice(1);
-  // "A" alone is read as the article — append period to force letter reading.
-  const spokenLetter = letter === 'A' ? 'A.' : letter;
-  if (accidental === '#') return `${spokenLetter} sharp`;
-  if (accidental === 'b') return `${spokenLetter} flat`;
-  return spokenLetter;
+  return `${speakableNoteName(rootName)} ${chord.spokenLabel}`;
 }
 
 /** Pick a random chord prompt, avoiding the previous one. */

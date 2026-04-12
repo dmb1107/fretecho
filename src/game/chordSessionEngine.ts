@@ -4,6 +4,7 @@
 import type { TuningId } from '../music/tunings';
 import type { PitchLoop } from '../audio/pitchDetector';
 import { cancelSpeech, prewarmSpeech, speak } from '../audio/speech';
+import { midiToNoteClass, speakableNoteName } from '../music/notes';
 import { playError, playSuccess } from '../audio/feedbackTones';
 import {
   pickChord,
@@ -17,7 +18,6 @@ import type { StatsMap } from '../stats/statsStore';
 
 export interface ChordSessionConfig {
   tuning: TuningId;
-  chordsPerSession: number;
   enabledChordTypes: string[];
   allowAccidentals: boolean;
   minFret: number;
@@ -110,11 +110,6 @@ export class ChordSessionEngine {
 
   private async nextRound() {
     if (this.stopped) return;
-    if (this.round >= this.cfg.chordsPerSession) {
-      this.deps.pitchLoop.stop();
-      this.setState({ kind: 'done', results: this.results });
-      return;
-    }
     this.round += 1;
     this.currentToneResults = [];
 
@@ -195,8 +190,10 @@ export class ChordSessionEngine {
       const newCompleted = [...completedTones, expectedPitchClass];
       const isLastTone = toneIndex >= chord.chordType.intervals.length - 1;
 
+      const noteName = speakableNoteName(midiToNoteClass(playedMidi, chord.useFlats));
+
       if (isLastTone) {
-        // Round complete.
+        // Round complete — speak the played note name, then start next round.
         const allCorrect = this.currentToneResults.every((t) => t.correct);
         const totalMs = this.currentToneResults.reduce((a, t) => a + t.ms, 0);
         this.results.push({
@@ -212,11 +209,14 @@ export class ChordSessionEngine {
           displayName,
           allCorrectFirstTry: allCorrect,
         });
-        setTimeout(() => {
+        speak(noteName).then(() => {
+          if (this.stopped) return sleep(0);
+          return sleep(200);
+        }).then(() => {
           if (!this.stopped) this.nextRound();
-        }, 650);
+        });
       } else {
-        // Advance to next tone within the chord.
+        // Advance to next tone — speak the played note name first.
         this.setState({
           kind: 'tone-feedback',
           round: this.round,
@@ -225,12 +225,17 @@ export class ChordSessionEngine {
           toneIndex,
           completedTones: newCompleted,
         });
-        setTimeout(() => {
+        speak(noteName).then(() => {
           if (this.stopped) return;
+          if (this.state.kind !== 'tone-feedback') return;
+          return sleep(200);
+        }).then(() => {
+          if (this.stopped) return;
+          if (this.state.kind !== 'tone-feedback') return;
           this.deps.pitchLoop.resume();
           this.deps.pitchLoop.armForNextNote();
           this.listenForTone(chord, displayName, toneIndex + 1, newCompleted);
-        }, 400);
+        });
       }
       return;
     }

@@ -3,7 +3,7 @@
 
 import type { TuningId, Position } from '../music/tunings';
 import { noteAt, positionKey, stringLabel } from '../music/tunings';
-import { midiToNoteName } from '../music/notes';
+import { midiToNoteName, speakableNoteName, speakableNoteWithOctave } from '../music/notes';
 import type { PitchLoop } from '../audio/pitchDetector';
 import { cancelSpeech, prewarmSpeech, speak } from '../audio/speech';
 import { playError, playSuccess } from '../audio/feedbackTones';
@@ -17,7 +17,6 @@ export type PromptStyle =
 
 export interface SessionConfig {
   tuning: TuningId;
-  notesPerSession: number;
   allowAccidentals: boolean;
   promptStyle: PromptStyle;
   focusWeakSpots: boolean;
@@ -100,11 +99,6 @@ export class SessionEngine {
 
   private async nextRound() {
     if (this.stopped) return;
-    if (this.round >= this.cfg.notesPerSession) {
-      this.deps.pitchLoop.stop();
-      this.setState({ kind: 'done', results: this.results });
-      return;
-    }
     this.round += 1;
 
     const last = this.state.kind !== 'idle' && 'target' in this.state ? this.state.target : undefined;
@@ -235,12 +229,10 @@ export class SessionEngine {
   /** TTS-friendly prompt with phonetic hacks (e.g. "A." for the letter A). */
   private speakText(pos: Position, expectedMidi: number, useFlats: boolean): string {
     const fullName = midiToNoteName(expectedMidi, useFlats);
-    const spokenWithOctave = speakableNote(fullName);
-    const spokenClassOnly = speakableNoteClass(fullName);
+    const spokenWithOctave = speakableNoteWithOctave(fullName);
+    const noteClass = fullName.replace(/-?\d+$/, '');
+    const spokenClassOnly = speakableNoteName(noteClass);
     const str = stringLabel(this.cfg.tuning, pos.stringIndex);
-    // "A" as a bare letter gets read as the English article ("uh"). Appending
-    // a period forces most TTS engines (Google, Microsoft) to read it as the
-    // letter name ("ay").
     const spokenStr = str === 'A' ? 'A.' : str;
     switch (this.cfg.promptStyle) {
       case 'note-only':
@@ -263,50 +255,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Convert a note name like "B1" / "F#2" / "Bb0" into something the TTS engine
- * pronounces clearly with its octave. e.g. "B one", "F sharp two", "B flat zero".
- */
-function speakableNote(nameWithOctave: string): string {
-  const m = /^([A-G])([#b]?)(-?\d+)$/.exec(nameWithOctave);
-  if (!m) return nameWithOctave;
-  const letter = m[1];
-  const accidental = m[2];
-  const octave = parseInt(m[3], 10);
-  // "A" as a bare letter gets read as the English article. Appending a period
-  // forces most TTS engines to read it as the letter name.
-  const spokenLetter = letter === 'A' ? 'A.' : letter;
-  let head = spokenLetter;
-  if (accidental === '#') head = `${spokenLetter} sharp`;
-  else if (accidental === 'b') head = `${spokenLetter} flat`;
-  return `${head} ${octaveWord(octave)}`;
-}
-
-/** Same as speakableNote but without the octave suffix. */
-function speakableNoteClass(nameWithOctave: string): string {
-  const m = /^([A-G])([#b]?)(-?\d+)$/.exec(nameWithOctave);
-  if (!m) return nameWithOctave;
-  const letter = m[1];
-  const accidental = m[2];
-  const spokenLetter = letter === 'A' ? 'A.' : letter;
-  if (accidental === '#') return `${spokenLetter} sharp`;
-  if (accidental === 'b') return `${spokenLetter} flat`;
-  return spokenLetter;
-}
-
-function octaveWord(n: number): string {
-  const words: Record<number, string> = {
-    [-1]: 'minus one',
-    0: 'zero',
-    1: 'one',
-    2: 'two',
-    3: 'three',
-    4: 'four',
-    5: 'five',
-    6: 'six',
-  };
-  return words[n] ?? String(n);
-}
 
 /** Exposed for Stats / session summary. */
 export function describeRound(tuning: TuningId, r: RoundResult, useFlats: boolean): string {

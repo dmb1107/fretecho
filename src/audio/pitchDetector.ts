@@ -77,6 +77,8 @@ export class PitchLoop {
     this.paused = true;
     this.consecutive = null;
     this.lastEmittedMidi = null;
+    // Clear the detected display so tones/speech don't leak info.
+    this.opts.onFrame?.(null);
   }
 
   /** Resume processing. Clears any residual state so the next note is fresh. */

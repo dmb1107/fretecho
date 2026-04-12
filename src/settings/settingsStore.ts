@@ -4,8 +4,10 @@ import { create } from 'zustand';
 import { instrumentOf, tuningsFor, type Instrument, type TuningId } from '../music/tunings';
 import type { PromptStyle } from '../game/sessionEngine';
 import { DEFAULT_ENABLED_CHORDS } from '../music/chords';
+import { DEFAULT_ENABLED_INTERVALS } from '../music/intervals';
 
-export type TrainingMode = 'notes' | 'chords';
+export type TrainingMode = 'notes' | 'chords' | 'ear';
+export type IntervalDirection = 'ascending' | 'descending' | 'random';
 
 export interface Settings {
   instrument: Instrument;
@@ -21,6 +23,11 @@ export interface Settings {
   trainingMode: TrainingMode;
   chordsPerSession: number;
   enabledChordTypes: string[];
+  // Ear training
+  earIntervalDirection: IntervalDirection;
+  enabledIntervals: string[];
+  showEarRootHint: boolean;
+  showEarIntervalHint: boolean;
 }
 
 /** Default max fret per instrument (min always starts at 0). */
@@ -43,9 +50,14 @@ const DEFAULTS: Settings = {
   trainingMode: 'notes',
   chordsPerSession: 10,
   enabledChordTypes: [...DEFAULT_ENABLED_CHORDS],
+  earIntervalDirection: 'random',
+  enabledIntervals: [...DEFAULT_ENABLED_INTERVALS],
+  showEarRootHint: false,
+  showEarIntervalHint: false,
 };
 
-const STORAGE_KEY = 'fretecho:settings:v3';
+const STORAGE_KEY = 'fretecho:settings:v4';
+const V3_KEY = 'fretecho:settings:v3';
 const V2_KEY = 'fretecho:settings:v2';
 const LEGACY_KEY = 'fretecho:settings:v1';
 
@@ -54,6 +66,13 @@ function load(): Settings {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       return { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) };
+    }
+    // Migrate from v3 (no ear training settings).
+    const v3 = localStorage.getItem(V3_KEY);
+    if (v3) {
+      const migrated = { ...DEFAULTS, ...(JSON.parse(v3) as Partial<Settings>) };
+      persist(migrated);
+      return migrated;
     }
     // Migrate from v2 (no chord settings).
     const v2 = localStorage.getItem(V2_KEY);
@@ -135,6 +154,10 @@ function persist(s: Settings) {
     trainingMode,
     chordsPerSession,
     enabledChordTypes,
+    earIntervalDirection,
+    enabledIntervals,
+    showEarRootHint,
+    showEarIntervalHint,
   } = s;
   localStorage.setItem(
     STORAGE_KEY,
@@ -152,6 +175,10 @@ function persist(s: Settings) {
       trainingMode,
       chordsPerSession,
       enabledChordTypes,
+      earIntervalDirection,
+      enabledIntervals,
+      showEarRootHint,
+      showEarIntervalHint,
     })
   );
 }

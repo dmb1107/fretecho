@@ -6,33 +6,55 @@ export function HelpScreen() {
       <header className="flex flex-col gap-2">
         <h2 className="text-2xl sm:text-3xl font-bold text-brand">How to use FretEcho</h2>
         <p className="text-neutral-400">
-          FretEcho calls out a note; you play it on your instrument.
+          FretEcho listens to your instrument via microphone and gives you
+          call-and-response drills across three training modes.
         </p>
       </header>
 
       <Section title="Getting started">
         <Ol>
-          <li>In <Kbd>Settings</Kbd>, choose your instrument and mic input.</li>
-          <li>In <Kbd>Train</Kbd>, hit <Kbd>Start session</Kbd> and play each note you hear.</li>
-          <li>Right = green, wrong = red and the fret is shown. Keep trying until you get it.</li>
+          <li>In <Kbd>Settings</Kbd>, choose your instrument, tuning, and mic input.</li>
+          <li>Return to <Kbd>Train</Kbd> — the mic opens automatically and the Detected panel shows what you're playing.</li>
+          <li>Pick a mode, hit <Kbd>Start session</Kbd>, and follow the prompts. Sessions run until you hit <Kbd>End session</Kbd>.</li>
         </Ol>
       </Section>
 
-      <Section title="Chord tone trainer">
+      <Section title="Note training">
+        <Ul>
+          <li>The app calls out a note and string (e.g. <em>"C on the A string"</em>). Play it.</li>
+          <li>Any octave of the correct note counts. Wrong notes keep the round alive — find the right one to advance.</li>
+          <li>Turn on <Kbd>Hints: on</Kbd> to see the target note highlighted on the fretboard.</li>
+        </Ul>
+      </Section>
+
+      <Section title="Chord tone training">
+        <Ul>
+          <li>The app calls out a chord (e.g. <em>"A major"</em>) and you play each tone in order: root, 3rd, 5th, etc.</li>
+          <li>After each correct tone the app speaks the note name, then prompts the next one.</li>
+          <li>Any octave of the correct pitch class counts on any string.</li>
+          <li>Configure which chord types to practice in <Kbd>Settings</Kbd>.</li>
+        </Ul>
+      </Section>
+
+      <Section title="Ear training">
         <Ol>
-          <li>Switch to <Kbd>Chord Tones</Kbd> mode using the toggle at the top of the Train tab.</li>
-          <li>The app calls out a chord (e.g. "C major seven") and you play each tone in order: root, 3rd, 5th, 7th.</li>
-          <li>Any octave counts — play the correct pitch class on any string.</li>
-          <li>Choose which chord types to practice in <Kbd>Settings</Kbd>.</li>
+          <li>The app plays a reference tone and says <em>"root"</em>. Play that note on your instrument.</li>
+          <li>Once you play the root, the app names the interval (e.g. <em>"major third up"</em>). Play the interval note.</li>
+          <li>Use <Kbd>▶ Replay reference</Kbd> if you need to hear the root tone again.</li>
+          <li>A direction arrow appears after a wrong attempt to show whether the correct note is higher or lower.</li>
         </Ol>
+        <p className="text-sm text-neutral-400 mt-3">
+          Enable <Kbd>Root hint</Kbd> or <Kbd>Interval hint</Kbd> to see matching fretboard positions highlighted.
+          Configure intervals and direction (ascending / descending / random) in <Kbd>Settings</Kbd>.
+        </p>
       </Section>
 
       <Section title="Good to know">
         <Ul>
-          <li>Scoring is by note name — any octave of the right note counts.</li>
-          <li>Only your first attempt on each note is scored.</li>
-          <li>The <Kbd>Stats</Kbd> tab shows a heatmap of your weak spots. Enable <em>Focus on weak spots</em> in Settings to drill them.</li>
-          <li>Everything is stored locally in your browser.</li>
+          <li>Only your first attempt on each note or tone is counted toward stats.</li>
+          <li>The mic is paused while the app is speaking so it can't hear its own output.</li>
+          <li>The <Kbd>Stats</Kbd> tab shows a heatmap of accuracy and speed. Enable <em>Focus on weak spots</em> in Settings to bias rounds toward your problem areas.</li>
+          <li>Everything is stored locally in your browser — no account, no server.</li>
         </Ul>
       </Section>
     </div>
