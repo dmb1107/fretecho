@@ -1,13 +1,11 @@
-// Ear training session engine: plays a reference tone, speaks an interval,
-// then the user plays the root note followed by the interval note.
-// For root-only (0 semitones), the round completes after the root.
+// Interval training session engine: speaks a root note name, user plays it,
+// then speaks an interval name, user plays the interval note.
 
 import type { PitchLoop } from '../audio/pitchDetector';
 import { cancelSpeech, prewarmSpeech, speak } from '../audio/speech';
 import { playError, playSuccess } from '../audio/feedbackTones';
-import { playReference, replayReference } from '../audio/bassTone';
 import { pickInterval, type IntervalDef } from '../music/intervals';
-import { midiToNoteClass } from '../music/notes';
+import { midiToNoteClass, speakableNoteName } from '../music/notes';
 import type { IntervalDirection } from '../settings/settingsStore';
 import type { StatsMap } from '../stats/statsStore';
 
@@ -34,8 +32,6 @@ export type EarEngineState =
       interval: IntervalDef;
       rootMidi: number;
       direction: 'ascending' | 'descending';
-      isAutoReplay?: boolean;
-      lastWrongMidi?: number;
     }
   | {
       kind: 'listening-root';
@@ -47,14 +43,6 @@ export type EarEngineState =
       startedAt: number;
       recorded: boolean;
       lastWrongMidi?: number;
-    }
-  | {
-      kind: 'root-feedback';
-      round: number;
-      interval: IntervalDef;
-      rootMidi: number;
-      expectedMidi: number;
-      direction: 'ascending' | 'descending';
     }
   | {
       kind: 'listening-interval';
@@ -122,39 +110,16 @@ export class EarSessionEngine {
     }
   };
 
-  /** Replay the current reference tone (user-triggered). */
-  replay() {
-    if (this.state.kind !== 'listening-root' && this.state.kind !== 'listening-interval') return;
-    // Save state so we can restore after replay.
-    const savedState = this.state;
-    this.deps.pitchLoop.pause();
-    // Transition to prompting so handleStableNote ignores any detection.
-    this.setState({
-      kind: 'prompting',
-      round: this.round,
-      interval: savedState.interval,
-      rootMidi: savedState.rootMidi,
-      direction: savedState.direction,
-    });
-    replayReference();
-    // Wait for tone (800ms) + analyser buffer flush (1200ms).
-    setTimeout(() => {
-      if (this.stopped) return;
-      this.deps.pitchLoop.resume();
-      this.deps.pitchLoop.armForNextNote();
-      this.setState(savedState);
-    }, 2000);
-  }
-
   private async nextRound() {
     if (this.stopped) return;
     this.round += 1;
 
-    const interval = pickInterval(this.cfg.enabledIntervals, this.lastIntervalId);
+    // Filter out 'R' in case persisted settings still have it.
+    const enabledIds = this.cfg.enabledIntervals.filter((id) => id !== 'R');
+    const interval = pickInterval(enabledIds, this.lastIntervalId);
     this.lastIntervalId = interval.id;
 
-    const isRoot = interval.semitones === 0;
-    const direction = isRoot ? 'ascending' as const : this.resolveDirection();
+    const direction = this.resolveDirection();
 
     // Pick a random root that keeps the target in range.
     const maxRoot = direction === 'ascending'
@@ -177,26 +142,16 @@ export class EarSessionEngine {
       direction,
     });
 
-    // Pause pitch loop so the synth tone + TTS don't trigger detection.
+    // Pause pitch loop so TTS doesn't trigger detection.
     this.deps.pitchLoop.pause();
 
-    // Play the reference tone.
-    playReference(rootMidi);
+    // Speak the root note name.
+    const rootName = midiToNoteClass(rootMidi, false);
+    await speak(speakableNoteName(rootName));
+    if (this.stopped) return;
 
-    if (isRoot) {
-      // Root-only: no TTS needed, just wait for tone + buffer flush.
-      await sleep(1500);
-    } else {
-      // Let the tone ring, then speak the note name so the user knows what root to play.
-      await sleep(900);
-      if (this.stopped) return;
-
-      await speak('root');
-      if (this.stopped) return;
-
-      // Flush analyser buffer.
-      await sleep(300);
-    }
+    // Flush analyser buffer.
+    await sleep(300);
     if (this.stopped) return;
 
     this.deps.pitchLoop.resume();
@@ -219,7 +174,7 @@ export class EarSessionEngine {
     if (this.state.kind !== 'listening-root') return;
     const {
       interval, rootMidi, expectedMidi, direction,
-      startedAt, recorded, lastWrongMidi,
+      startedAt, lastWrongMidi,
     } = this.state;
 
     const playedPc = ((playedMidi % 12) + 12) % 12;
@@ -230,44 +185,16 @@ export class EarSessionEngine {
       this.deps.pitchLoop.pause();
       playSuccess();
 
-      // For root-only intervals (0 semitones), the round is complete.
-      if (interval.semitones === 0) {
-        const ms = performance.now() - startedAt;
-        if (!recorded) {
-          const result: EarRoundResult = {
-            interval, rootMidi, expectedMidi, playedMidi, correct: true, ms, direction,
-          };
-          this.results.push(result);
-          this.deps.recordStat(`ear:interval:${interval.id}`, true, ms);
-        }
-        this.setState({
-          kind: 'feedback',
-          round: this.round,
-          result: { interval, rootMidi, expectedMidi, playedMidi, correct: true, ms, direction },
-        });
-        setTimeout(() => {
-          if (!this.stopped) this.nextRound();
-        }, 650);
-        return;
-      }
-
-      // Non-root interval: speak interval name, then start listening.
-      this.setState({
-        kind: 'root-feedback',
-        round: this.round,
-        interval,
-        rootMidi,
-        expectedMidi,
-        direction,
-      });
-
+      // Speak interval name, then start listening for interval note.
       const dirWord = direction === 'ascending' ? 'up' : 'down';
       speak(`${interval.spokenLabel} ${dirWord}`).then(() => {
         if (this.stopped) return;
-        if (this.state.kind !== 'root-feedback') return;
+        if (this.state.kind !== 'listening-root') {
+          // State may have changed if stop was called during speech
+          return;
+        }
         sleep(300).then(() => {
           if (this.stopped) return;
-          if (this.state.kind !== 'root-feedback') return;
           this.deps.pitchLoop.resume();
           this.deps.pitchLoop.armForNextNote();
           this.setState({
@@ -282,6 +209,9 @@ export class EarSessionEngine {
           });
         });
       });
+
+      // Temporarily keep the listening-root state so UI shows root as confirmed.
+      // The state will transition to listening-interval after speech completes.
       return;
     }
 
@@ -303,30 +233,12 @@ export class EarSessionEngine {
     });
 
     this.deps.pitchLoop.pause();
-    if (!samePcAsLastWrong) {
-      // Switch to prompting so handleStableNote ignores detections during replay.
-      const restoreState = this.state;
-      this.setState({ kind: 'prompting', round: this.round, interval, rootMidi, direction, isAutoReplay: true, lastWrongMidi: playedMidi });
-      // Replay the reference tone after the error blip finishes (~500ms),
-      // then restore listening state after tone + buffer flush.
-      setTimeout(() => {
-        if (this.stopped) return;
-        replayReference();
-      }, 500);
-      setTimeout(() => {
-        if (this.stopped) return;
-        this.deps.pitchLoop.resume();
-        this.deps.pitchLoop.armForNextNote();
-        this.setState(restoreState);
-      }, 500 + 800 + 400);
-    } else {
-      setTimeout(() => {
-        if (this.stopped) return;
-        if (this.state.kind !== 'listening-root') return;
-        this.deps.pitchLoop.resume();
-        this.deps.pitchLoop.armForNextNote();
-      }, 400);
-    }
+    setTimeout(() => {
+      if (this.stopped) return;
+      if (this.state.kind !== 'listening-root') return;
+      this.deps.pitchLoop.resume();
+      this.deps.pitchLoop.armForNextNote();
+    }, 400);
   }
 
   private judgeInterval(playedMidi: number) {
@@ -414,10 +326,6 @@ function sleep(ms: number): Promise<void> {
 
 /** Describe a round result for the session summary. */
 export function describeEarRound(r: EarRoundResult): string {
-  if (r.interval.semitones === 0) {
-    const root = midiToNoteClass(r.rootMidi, false);
-    return r.correct ? `Root ${root} — correct` : `Root ${root} — missed`;
-  }
   const dir = r.direction === 'ascending' ? '↑' : '↓';
   const expected = midiToNoteClass(r.expectedMidi, false);
   const root = midiToNoteClass(r.rootMidi, false);

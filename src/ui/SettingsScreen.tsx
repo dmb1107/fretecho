@@ -76,7 +76,7 @@ export function SettingsScreen() {
         </div>
       </Section>
 
-      <Section title="Ear training">
+      <Section title="Interval training">
         <Field label="Direction">
           <select
             value={s.earIntervalDirection}

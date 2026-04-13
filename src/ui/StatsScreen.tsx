@@ -129,19 +129,13 @@ function EarTrainingStats({ stats }: { stats: Record<string, { attempts: number;
   const earStats: { interval: typeof INTERVALS[number]; direction: string; dirLabel: string; stat: { attempts: number; correct: number; totalMs: number } }[] = [];
 
   for (const iv of INTERVALS) {
-    if (iv.semitones === 0) {
-      // Root has no direction — check both old key format and current.
-      const stat = stats[`ear:interval:${iv.id}`];
-      if (stat) earStats.push({ interval: iv, direction: '', dirLabel: '', stat });
-    } else {
-      for (const dir of directions) {
-        const stat = stats[`ear:interval:${iv.id}:${dir}`];
-        if (stat) earStats.push({ interval: iv, direction: dir, dirLabel: dir === 'ascending' ? '↑' : '↓', stat });
-      }
-      // Also check old format (no direction) for backwards compatibility.
-      const oldStat = stats[`ear:interval:${iv.id}`];
-      if (oldStat) earStats.push({ interval: iv, direction: '', dirLabel: '', stat: oldStat });
+    for (const dir of directions) {
+      const stat = stats[`ear:interval:${iv.id}:${dir}`];
+      if (stat) earStats.push({ interval: iv, direction: dir, dirLabel: dir === 'ascending' ? '↑' : '↓', stat });
     }
+    // Also check old format (no direction) for backwards compatibility.
+    const oldStat = stats[`ear:interval:${iv.id}`];
+    if (oldStat) earStats.push({ interval: iv, direction: '', dirLabel: '', stat: oldStat });
   }
 
   if (earStats.length === 0) return null;
@@ -152,7 +146,7 @@ function EarTrainingStats({ stats }: { stats: Record<string, { attempts: number;
   return (
     <>
       <div className="mt-4 sm:mt-8 flex items-end justify-between">
-        <h2 className="text-lg sm:text-2xl font-bold">Ear training</h2>
+        <h2 className="text-lg sm:text-2xl font-bold">Interval training</h2>
       </div>
 
       <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-6 text-sm">

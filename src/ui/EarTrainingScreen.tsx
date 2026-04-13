@@ -1,5 +1,5 @@
-// Ear training screen: plays a reference tone + interval name,
-// user plays the root note then the interval note.
+// Interval training screen: speaks a root note name, user plays it,
+// then speaks an interval, user plays the interval note.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSettings, type TrainingMode } from '../settings/settingsStore';
@@ -66,8 +66,6 @@ export function EarTrainingScreen() {
         setEngineState(s);
         if (s.kind === 'done') {
           setRunning(false);
-        } else if (s.kind === 'root-feedback') {
-          setFlash('success');
         } else if (s.kind === 'feedback') {
           setFlash(s.result.correct ? 'success' : 'error');
           if (s.round !== lastCountedRoundRef.current) {
@@ -114,19 +112,15 @@ export function EarTrainingScreen() {
     };
 
     if (engineState.kind === 'listening-root') {
-      if (settings.showEarRootHint) {
-        const rootPc = ((engineState.rootMidi % 12) + 12) % 12;
-        highlightPc(rootPc, '#ff6b35', true);
-      }
-    } else if (engineState.kind === 'root-feedback') {
+      // Always show root on fretboard since we told the user what note to play.
       const rootPc = ((engineState.rootMidi % 12) + 12) % 12;
-      highlightPc(rootPc, '#22c55e');
+      highlightPc(rootPc, '#ff6b35', true);
     } else if (engineState.kind === 'listening-interval') {
       // Show root as completed (dim green).
       const rootPc = ((engineState.rootMidi % 12) + 12) % 12;
       highlightPc(rootPc, '#22c55e');
       // Show interval hint if enabled.
-      if (settings.showEarIntervalHint) {
+      if (settings.showHint) {
         const expectedPc = ((engineState.expectedMidi % 12) + 12) % 12;
         highlightPc(expectedPc, '#ff6b35', true);
       }
@@ -138,7 +132,7 @@ export function EarTrainingScreen() {
     }
 
     return m;
-  }, [engineState, settings.tuning, settings.minFret, settings.maxFret, settings.showEarRootHint, settings.showEarIntervalHint]);
+  }, [engineState, settings.tuning, settings.minFret, settings.maxFret, settings.showHint]);
 
   const roundNum = 'round' in engineState ? engineState.round : 0;
 
@@ -166,12 +160,13 @@ export function EarTrainingScreen() {
         <>
           <EarPromptDisplay
             state={engineState}
-            showRootHint={settings.showEarRootHint}
-            showIntervalHint={settings.showEarIntervalHint}
-            onReplay={() => engineRef.current?.replay()}
+            showIntervalHint={settings.showHint}
           />
 
-          <HintToggles />
+          <HintToggle
+            active={settings.showHint}
+            onToggle={() => settings.set('showHint', !settings.showHint)}
+          />
 
           <div className="flex justify-center">
             <Fretboard
@@ -232,56 +227,36 @@ export function EarTrainingScreen() {
   );
 }
 
-function HintToggles() {
-  const settings = useSettings();
+function HintToggle({ active, onToggle }: { active: boolean; onToggle: () => void }) {
   return (
-    <div className="flex justify-end gap-2">
-      <HintToggle
-        label="Root hint"
-        active={settings.showEarRootHint}
-        onToggle={() => settings.set('showEarRootHint', !settings.showEarRootHint)}
-      />
-      <HintToggle
-        label="Interval hint"
-        active={settings.showEarIntervalHint}
-        onToggle={() => settings.set('showEarIntervalHint', !settings.showEarIntervalHint)}
-      />
-    </div>
-  );
-}
-
-function HintToggle({ label, active, onToggle }: { label: string; active: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-pressed={active}
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-        active
-          ? 'border-orange-500/60 bg-orange-500/15 text-orange-300 hover:bg-orange-500/20'
-          : 'border-neutral-700 bg-neutral-900 text-neutral-400 hover:bg-neutral-800'
-      }`}
-    >
-      <span
-        className={`inline-block h-2 w-2 rounded-full ${
-          active ? 'bg-orange-400' : 'bg-neutral-600'
+    <div className="flex justify-end">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-pressed={active}
+        className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+          active
+            ? 'border-orange-500/60 bg-orange-500/15 text-orange-300 hover:bg-orange-500/20'
+            : 'border-neutral-700 bg-neutral-900 text-neutral-400 hover:bg-neutral-800'
         }`}
-      />
-      {label}: {active ? 'on' : 'off'}
-    </button>
+      >
+        <span
+          className={`inline-block h-2 w-2 rounded-full ${
+            active ? 'bg-orange-400' : 'bg-neutral-600'
+          }`}
+        />
+        Hints: {active ? 'on' : 'off'}
+      </button>
+    </div>
   );
 }
 
 function EarPromptDisplay({
   state,
-  showRootHint,
   showIntervalHint,
-  onReplay,
 }: {
   state: EarEngineState;
-  showRootHint: boolean;
   showIntervalHint: boolean;
-  onReplay: () => void;
 }) {
   if (state.kind === 'idle') {
     return (
@@ -300,23 +275,17 @@ function EarPromptDisplay({
   const rootMidi = 'rootMidi' in state ? state.rootMidi : state.kind === 'feedback' ? state.result.rootMidi : null;
   const expectedMidi = 'expectedMidi' in state ? state.expectedMidi : state.kind === 'feedback' ? state.result.expectedMidi : null;
   const direction = 'direction' in state ? state.direction : state.kind === 'feedback' ? state.result.direction : null;
-  const isRoot = interval !== null && interval.semitones === 0;
 
   let statusText: string;
-  let phase: 'prompting' | 'root' | 'root-ok' | 'interval' | 'done';
+  let phase: 'prompting' | 'root' | 'interval' | 'done';
   if (state.kind === 'prompting') {
     statusText = 'Listen…';
     phase = 'prompting';
   } else if (state.kind === 'listening-root') {
-    statusText = isRoot
-      ? (state.lastWrongMidi !== undefined ? 'Try again' : 'Play the note')
-      : (state.lastWrongMidi !== undefined ? 'Try again — play the root' : 'Play the root');
+    statusText = state.lastWrongMidi !== undefined ? 'Try again' : 'Play the note';
     phase = 'root';
-  } else if (state.kind === 'root-feedback') {
-    statusText = 'Root correct — now play the interval';
-    phase = 'root-ok';
   } else if (state.kind === 'listening-interval') {
-    statusText = state.recorded ? 'Try again' : 'Play the interval';
+    statusText = state.lastWrongMidi !== undefined ? 'Try again' : 'Play the interval';
     phase = 'interval';
   } else {
     statusText = state.result.correct ? 'Correct!' : 'Wrong';
@@ -331,24 +300,12 @@ function EarPromptDisplay({
   let largeText: string;
   let subtitleText: string | null = null;
 
-  if (isRoot) {
-    // Root-only: just show "Root" or the hint note name.
-    if (phase === 'root') {
-      largeText = showRootHint ? rootName : '?';
-      subtitleText = 'Match the note';
-    } else if (phase === 'done' && state.kind === 'feedback') {
-      largeText = rootName;
-      subtitleText = null;
-    } else {
-      largeText = 'R';
-      subtitleText = null;
-    }
+  if (phase === 'prompting') {
+    largeText = rootName;
+    subtitleText = null;
   } else if (phase === 'root') {
-    largeText = showRootHint ? rootName : '?';
-    subtitleText = `${interval?.label} ${dirArrow}`;
-  } else if (phase === 'root-ok') {
-    largeText = interval?.shortLabel ?? '—';
-    subtitleText = `${interval?.label} ${dirArrow} from ${rootName}`;
+    largeText = rootName;
+    subtitleText = null;
   } else if (phase === 'interval') {
     largeText = showIntervalHint ? intervalNoteName : interval?.shortLabel ?? '—';
     subtitleText = `${interval?.label} ${dirArrow} from ${rootName}`;
@@ -356,31 +313,15 @@ function EarPromptDisplay({
     largeText = interval?.shortLabel ?? '—';
     subtitleText = `${interval?.label} ${dirArrow} from ${rootName}`;
   } else {
-    // prompting phase — show '?' during auto-replay, interval label otherwise
-    largeText = (state.kind === 'prompting' && state.isAutoReplay) ? '?' : (interval?.shortLabel ?? '—');
-    subtitleText = interval ? `${interval.label} ${dirArrow}` : null;
+    largeText = '—';
   }
 
-  // Show a direction arrow after a wrong attempt — shortest chromatic distance, octave-agnostic.
-  let wrongArrow: string | null = null;
-  if (state.kind === 'listening-interval' && state.lastWrongMidi !== undefined) {
-    const targetPc = ((state.expectedMidi % 12) + 12) % 12;
-    const playedPc = ((state.lastWrongMidi % 12) + 12) % 12;
-    const up = ((targetPc - playedPc) + 12) % 12;
-    const down = ((playedPc - targetPc) + 12) % 12;
-    if (up !== 0) wrongArrow = up <= down ? '↑' : '↓';
-  } else if (state.kind === 'listening-root' && state.lastWrongMidi !== undefined) {
-    const targetPc = ((state.rootMidi % 12) + 12) % 12;
-    const playedPc = ((state.lastWrongMidi % 12) + 12) % 12;
-    const up = ((targetPc - playedPc) + 12) % 12;
-    const down = ((playedPc - targetPc) + 12) % 12;
-    if (up !== 0) wrongArrow = up <= down ? '↑' : '↓';
-  } else if (state.kind === 'prompting' && state.isAutoReplay && state.lastWrongMidi !== undefined) {
-    const targetPc = ((state.rootMidi % 12) + 12) % 12;
-    const playedPc = ((state.lastWrongMidi % 12) + 12) % 12;
-    const up = ((targetPc - playedPc) + 12) % 12;
-    const down = ((playedPc - targetPc) + 12) % 12;
-    if (up !== 0) wrongArrow = up <= down ? '↑' : '↓';
+  // Wrong-note message (same pattern as notes section).
+  let wrongNoteMsg: string | null = null;
+  if (state.kind === 'listening-root' && state.lastWrongMidi !== undefined) {
+    wrongNoteMsg = `You played ${midiToNoteName(state.lastWrongMidi, false)} — find the correct position`;
+  } else if (state.kind === 'listening-interval' && state.lastWrongMidi !== undefined) {
+    wrongNoteMsg = `You played ${midiToNoteName(state.lastWrongMidi, false)} — find the correct position`;
   }
 
   return (
@@ -388,23 +329,16 @@ function EarPromptDisplay({
       <div className="text-xs sm:text-sm uppercase tracking-widest text-neutral-500">
         {statusText}
       </div>
-      <div className="flex items-center gap-2 sm:gap-4">
-        <div className="text-5xl sm:text-[100px] leading-none font-display font-bold text-brand drop-shadow">
-          {largeText}
-        </div>
-        {wrongArrow && (
-          <div className="text-4xl sm:text-7xl font-bold text-red-400 animate-pulse">
-            {wrongArrow}
-          </div>
-        )}
+      <div className="text-5xl sm:text-[100px] leading-none font-display font-bold text-brand drop-shadow">
+        {largeText}
       </div>
       {subtitleText && (
         <div className="text-base sm:text-xl text-neutral-300">
           {subtitleText}
         </div>
       )}
-      {/* Phase dots: root → interval (only for non-root intervals) */}
-      {!isRoot && phase !== 'prompting' && (
+      {/* Phase dots: root → interval */}
+      {phase !== 'prompting' && (
         <div className="flex items-center gap-2 mt-1">
           <div className="flex flex-col items-center gap-1">
             <div
@@ -430,25 +364,17 @@ function EarPromptDisplay({
           </div>
         </div>
       )}
-      {state.kind === 'feedback' && !isRoot && (
+      {wrongNoteMsg && (
+        <div className="text-sm text-red-400">
+          {wrongNoteMsg}
+        </div>
+      )}
+      {state.kind === 'feedback' && (
         <div className="text-sm text-neutral-400">
           Expected {midiToNoteClass(state.result.expectedMidi, false)} — you played{' '}
           {midiToNoteClass(state.result.playedMidi, false)}{' '}
           {state.result.correct ? '✓' : '✗'} in {(state.result.ms / 1000).toFixed(2)}s
         </div>
-      )}
-      {state.kind === 'feedback' && isRoot && (
-        <div className="text-sm text-neutral-400">
-          {state.result.correct ? '✓' : '✗'} in {(state.result.ms / 1000).toFixed(2)}s
-        </div>
-      )}
-      {(state.kind === 'listening-root' || state.kind === 'prompting') && (
-        <button
-          onClick={onReplay}
-          className="mt-2 px-3 py-1.5 rounded-full border border-neutral-700 bg-neutral-900 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 text-xs font-medium transition-colors"
-        >
-          ▶ Replay reference
-        </button>
       )}
     </div>
   );
@@ -538,7 +464,7 @@ function ModeToggle() {
   const modes: { value: TrainingMode; label: string }[] = [
     { value: 'notes', label: 'Notes' },
     { value: 'chords', label: 'Chord Tones' },
-    { value: 'ear', label: 'Ear Training' },
+    { value: 'ear', label: 'Intervals' },
   ];
   return (
     <div className="flex justify-center">

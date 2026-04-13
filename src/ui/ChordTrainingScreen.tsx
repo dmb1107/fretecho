@@ -438,7 +438,7 @@ function ModeToggle() {
   const modes: { value: TrainingMode; label: string }[] = [
     { value: 'notes', label: 'Notes' },
     { value: 'chords', label: 'Chord Tones' },
-    { value: 'ear', label: 'Ear Training' },
+    { value: 'ear', label: 'Intervals' },
   ];
   return (
     <div className="flex justify-center">

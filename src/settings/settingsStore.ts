@@ -23,10 +23,9 @@ export interface Settings {
   trainingMode: TrainingMode;
   chordsPerSession: number;
   enabledChordTypes: string[];
-  // Ear training
+  // Interval training
   earIntervalDirection: IntervalDirection;
   enabledIntervals: string[];
-  showEarRootHint: boolean;
   showEarIntervalHint: boolean;
 }
 
@@ -52,7 +51,6 @@ const DEFAULTS: Settings = {
   enabledChordTypes: [...DEFAULT_ENABLED_CHORDS],
   earIntervalDirection: 'random',
   enabledIntervals: [...DEFAULT_ENABLED_INTERVALS],
-  showEarRootHint: false,
   showEarIntervalHint: false,
 };
 
@@ -156,7 +154,6 @@ function persist(s: Settings) {
     enabledChordTypes,
     earIntervalDirection,
     enabledIntervals,
-    showEarRootHint,
     showEarIntervalHint,
   } = s;
   localStorage.setItem(
@@ -177,7 +174,6 @@ function persist(s: Settings) {
       enabledChordTypes,
       earIntervalDirection,
       enabledIntervals,
-      showEarRootHint,
       showEarIntervalHint,
     })
   );

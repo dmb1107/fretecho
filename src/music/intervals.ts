@@ -9,7 +9,6 @@ export interface IntervalDef {
 }
 
 export const INTERVALS: IntervalDef[] = [
-  { id: 'R',  semitones: 0,  label: 'Root',          shortLabel: 'R',  spokenLabel: 'root' },
   { id: 'm2', semitones: 1,  label: 'Minor 2nd',    shortLabel: 'm2', spokenLabel: 'minor second' },
   { id: 'M2', semitones: 2,  label: 'Major 2nd',    shortLabel: 'M2', spokenLabel: 'major second' },
   { id: 'm3', semitones: 3,  label: 'Minor 3rd',    shortLabel: 'm3', spokenLabel: 'minor third' },
